@@ -14,7 +14,7 @@ def get_nwm_data(feature_id, time_range):
     Arguments:
     ----------
     feature_id (int): Feature ID for which NWM data needs to be returned
-    time_range (array):
+    time_range (array): Time array containing start and end date as string in YYYY-MM-DD format
 
     Returns
     -------
@@ -26,3 +26,7 @@ def get_nwm_data(feature_id, time_range):
     fs = s3fs.S3FileSystem(anon=True)
     store = s3fs.S3Map(url, s3=fs)
     ds_nwm_chrtout = xr.open_zarr(store, consolidated=True)
+
+
+
+
