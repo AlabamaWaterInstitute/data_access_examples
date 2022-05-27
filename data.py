@@ -1,3 +1,6 @@
+# Script to access NOAA NWM data from AWS S3
+# Author: Karnesh Jain
+
 import xarray as xr
 import s3fs
 from datetime import datetime
@@ -16,10 +19,11 @@ def get_nwm_data(feature_id, start_date, end_date):
 
     Returns
     -------
-    (pandas.dataframe): Pandas dataframe with NWM data for selected time range corresponding to feature ID
+    (pandas.dataframe): Pandas dataframe with NWM data for user queried time range and feature ID
 
     """
 
+    # check start and end date format
     try:
         datetime.strptime(start_date, '%Y-%m-%d')
         datetime.strptime(end_date, '%Y-%m-%d')
