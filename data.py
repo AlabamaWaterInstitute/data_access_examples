@@ -1,5 +1,6 @@
 import xarray as xr
 import s3fs
+from datetime import datetime
 
 
 def get_nwm_data(feature_id, start_date, end_date):
@@ -18,6 +19,12 @@ def get_nwm_data(feature_id, start_date, end_date):
     (pandas.dataframe): Pandas dataframe with NWM data for selected time range corresponding to feature ID
 
     """
+
+    try:
+        datetime.strptime(start_date, '%Y-%m-%d')
+        datetime.strptime(end_date, '%Y-%m-%d')
+    except ValueError:
+        raise ValueError("Start and end date should have YYYY-MM-DD format")
 
     url = "s3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr"
     fs = s3fs.S3FileSystem(anon=True)
