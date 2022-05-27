@@ -11,8 +11,8 @@ def get_nwm_data(feature_id, start_date, end_date):
     Arguments:
     ----------
     feature_id (int): Feature ID for which NWM data needs to be returned
-    start_date (str): Start date in "YYYY-MM-DD" or "YYYY-MM" format
-    end_date (str): End date in "YYYY-MM-DD" or "YYYY-MM" format
+    start_date (str): Start date in "YYYY-MM-DD" format
+    end_date (str): End date in "YYYY-MM-DD" format
 
     Returns
     -------
