@@ -6,7 +6,7 @@ import zarr
 import fsspec
 
 
-def get_nwm_data(feature_id, time_range):
+def get_nwm_data(feature_id, start_date, end_date):
     """
     Get NOAA NWM data from AWS
     It is filtered to retrieve data for a particular time range corresponding to a particular feature ID
@@ -14,7 +14,8 @@ def get_nwm_data(feature_id, time_range):
     Arguments:
     ----------
     feature_id (int): Feature ID for which NWM data needs to be returned
-    time_range (array): Time array containing start and end date as string in YYYY-MM-DD format
+    start_date (str): Start date in "YYYY-MM-DD" or "YYYY-MM" format
+    end_date (str): End date in "YYYY-MM-DD" or "YYYY-MM" format
 
     Returns
     -------
@@ -26,6 +27,8 @@ def get_nwm_data(feature_id, time_range):
     fs = s3fs.S3FileSystem(anon=True)
     store = s3fs.S3Map(url, s3=fs)
     ds_nwm_chrtout = xr.open_zarr(store, consolidated=True)
+
+    ds_nwm_filtered = ds_nwm_chrtout.sel(feature_id=feature_id, time=slice(start_date, end_date))
 
 
 
