@@ -1,15 +1,11 @@
-import numpy as np
-import pandas as pd
 import xarray as xr
 import s3fs
-import zarr
-import fsspec
 
 
 def get_nwm_data(feature_id, start_date, end_date):
     """
     Get NOAA NWM data from AWS
-    It is filtered to retrieve data for a particular time range corresponding to a particular feature ID
+    It is filtered to retrieve data for a particular time range corresponding to a feature ID
 
     Arguments:
     ----------
@@ -30,6 +26,6 @@ def get_nwm_data(feature_id, start_date, end_date):
 
     ds_nwm_filtered = ds_nwm_chrtout.sel(feature_id=feature_id, time=slice(start_date, end_date))
 
+    df_nwm_chrtout = ds_nwm_filtered.to_dataframe()
 
-
-
+    return df_nwm_chrtout
