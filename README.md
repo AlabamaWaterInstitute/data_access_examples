@@ -11,3 +11,7 @@ The data is filtered based on user queried date range and feature ID.
 - xarray
 - matplotlib
 - pandas
+- zarr
+- numpy
+- hydroeval
+
