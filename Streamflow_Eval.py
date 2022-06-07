@@ -91,11 +91,12 @@ class Reach_Eval():
 
 
         fig, ax = plt.subplots(1,2, figsize = (10,5))
-        ax[0].plot(self.Evaluation.index, self.Evaluation.USGS_flow, color = 'blue')
-        ax[0].plot(self.Evaluation.index, self.Evaluation.NWM_flow, color = 'orange')
+        ax[0].plot(self.Evaluation.index, self.Evaluation.USGS_flow, color = 'blue', label = 'USGS')
+        ax[0].plot(self.Evaluation.index, self.Evaluation.NWM_flow, color = 'orange',  label = 'NWM')
         ax[0].set_xlabel('Datetime')
         ax[0].set_ylabel(discharge)
         ax[0].tick_params(axis='x', rotation = 45)
+        ax[0].legend()
 
         ax[1].scatter(self.Evaluation.USGS_flow, self.Evaluation.NWM_flow, color = 'black')
         ax[1].plot([min_flow, max_flow],[min_flow, max_flow], ls = '--', c='red')
