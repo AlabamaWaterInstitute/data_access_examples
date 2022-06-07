@@ -93,6 +93,8 @@ class Reach_Eval():
         fig, ax = plt.subplots(1,2, figsize = (10,5))
         ax[0].plot(self.Evaluation.index, self.Evaluation.USGS_flow, color = 'blue', label = 'USGS')
         ax[0].plot(self.Evaluation.index, self.Evaluation.NWM_flow, color = 'orange',  label = 'NWM')
+        ax[0].fill_between(self.Evaluation.index, self.Evaluation.NWM_flow, self.Evaluation.USGS_flow, where= self.Evaluation.NWM_flow >= self.Evaluation.USGS_flow, facecolor='orange', alpha=0.2, interpolate=True)
+        ax[0].fill_between(self.Evaluation.index, self.Evaluation.NWM_flow, self.Evaluation.USGS_flow, where= self.Evaluation.NWM_flow < self.Evaluation.USGS_flow, facecolor='blue', alpha=0.2, interpolate=True)
         ax[0].set_xlabel('Datetime')
         ax[0].set_ylabel(discharge)
         ax[0].tick_params(axis='x', rotation = 45)
@@ -115,7 +117,7 @@ class Reach_Eval():
         print('RMSE = ', rmse, self.Evaluation['measurement_unit'][0])
         print('Maximum error = ', maxerror, self.Evaluation['measurement_unit'][0])
         print('Mean Absolute Percentage Error = ', MAPE, '%')
-        print('Kling-Gupta Efficiency = ', kge)
+        print('Kling-Gupta Efficiency = ', kge[0])
         
         
 
