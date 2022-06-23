@@ -1,9 +1,11 @@
 # Script to access NOAA NWM data from AWS S3
 # Author: Karnesh Jain
 
+import pandas as pd
 import xarray as xr
 import s3fs
 from datetime import datetime
+import plotly.express as px
 
 
 def get_nwm_data(feature_id, start_date, end_date):
@@ -40,3 +42,51 @@ def get_nwm_data(feature_id, start_date, end_date):
     df_nwm_chrtout = ds_nwm_filtered.to_dataframe()
 
     return df_nwm_chrtout
+
+
+def plot_nwm_data(*dfs_nwm):
+    """
+    Get NOAA NWM data from AWS
+    It is filtered to retrieve data for a particular time range corresponding to a feature ID
+
+    Arguments:
+    ----------
+    dfs_nwm (pandas_dataframe): NWM data from get_nwm_data method
+
+    Returns
+    -------
+    Geographic plot with time slider
+
+    """
+    df_nwm = pd.DataFrame()
+
+    for df in dfs_nwm:
+        df = df.resample('D').mean()
+        if df_nwm.empty:
+            df_nwm = df
+        else:
+            df_nwm = pd.concat([df_nwm, df], ignore_index=False)
+
+    df_nwm = df_nwm.dropna().reset_index()
+    df_nwm = df_nwm.sort_values(by='time')
+    df_nwm['time'] = df_nwm.time.apply(lambda x: x.date()).apply(str)  # convert timestamp to a string
+
+    fig = px.scatter_mapbox(df_nwm, lat="latitude", lon="longitude",
+                             animation_frame='time', animation_group='feature_id',
+                             color="streamflow", size="streamflow",
+                             zoom=3, height=500, hover_name='feature_id',
+                             hover_data=['streamflow'])
+
+    fig.update_layout(mapbox_style="white-bg",
+                       mapbox_layers=[
+                           {
+                               "below": 'traces',
+                               "sourcetype": "raster",
+                               "sourceattribution": "USGS",
+                               "source": [
+                                   "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"
+                               ]
+                           }
+                       ])
+
+    fig.show()
