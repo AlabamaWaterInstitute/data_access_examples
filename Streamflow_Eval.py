@@ -15,6 +15,7 @@ will be benefitical for finding NWM reachs between USGS sites
 
 # Import the NWIS IV Client to load USGS site data
 from hydrotools.nwis_client.iv import IVDataService
+from hydrotools.nwm_client import utils
 import pandas as pd
 import numpy as np
 import data
@@ -24,29 +25,38 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import max_error
 from sklearn.metrics import mean_absolute_percentage_error
 import hydroeval as he
-
-# In[3]:
-
+import dataretrieval.nwis as nwis
+import streamstats
+import geopandas as gpd
+from IPython.display import display
+import warnings
+from progressbar import ProgressBar
+import folium
+import matplotlib
+import mapclassify
+warnings.filterwarnings("ignore")
 
 
 class Reach_Eval():
     
-    def __init__(self, NWISreach, NWMsegment, startDT, endDT, freq):
+    def __init__(self, NWISsite, startDT, endDT, freq, cwd):
         self = self
-        self.NWISreach = NWISreach
-        self.NWM_segment = NWMsegment
+        self.NWISsite = NWISsite
+        self.NWM_NWIS_df= utils.crosswalk(usgs_site_codes=self.NWISsite)
+        self.NWM_segment = self.NWM_NWIS_df.nwm_feature_id.values[0]
         self.startDT = startDT
         self.endDT = endDT
         self.freq = freq
+        self.cwd = cwd
         self.cms_to_cfs = 35.314666212661
     
     #A function for accessing NWIS data and procesing to daily mean flow
     def NWIS_retrieve(self):
         # Retrieve data from a single site
-        print('Retrieving USGS site ', self.NWISreach, ' data')
+        print('Retrieving USGS site ', self.NWISsite, ' data')
         service = IVDataService()
         self.usgs_data = service.get(
-            sites=self.NWISreach,
+            sites=self.NWISsite,
             startDT= self.startDT,
             endDT=self.endDT
             )
@@ -68,6 +78,10 @@ class Reach_Eval():
         self.usgs_meanflow = self.usgs_meanflow.rename(columns={'value_time':'Datetime', 'value':'USGS_flow','usgs_site_code':'USGS_ID', 'variable_name':'variable'})
         self.usgs_meanflow = self.usgs_meanflow.set_index('Datetime')
         
+        #Get watershed information
+        #self.get_StreamStats()
+        #display(self.Catchment_Stats)
+        
         
     # A function for accessing NWM data and processing to daily mean flow
     def NWM_retrieve(self):
@@ -83,7 +97,10 @@ class Reach_Eval():
         
         #merge NWM and USGS
         self.Evaluation = pd.concat([self.usgs_meanflow, self.NWM_meanflow], axis=1)
-
+        
+        #remove rows with NA
+        self.Evaluation = self.Evaluation.dropna(axis = 0)
+          
         #create two plots, a hydrograph and a parity plot
         discharge = 'Discharge ' + '('+ self.Evaluation['measurement_unit'][0]+')'
         max_flow = max(max(self.Evaluation.USGS_flow), max(self.Evaluation.NWM_flow))
@@ -119,7 +136,250 @@ class Reach_Eval():
         print('Mean Absolute Percentage Error = ', MAPE, '%')
         print('Kling-Gupta Efficiency = ', kge[0])
         
+      
+    
+    def get_StreamStats(self):
+        print('Calculating the summary statistics of the catchment')
+        NWISinfo = nwis.get_record(sites=self.NWISsite, service='site')
+
+        #Get site information for streamstats
+        lat, lon = NWISinfo['dec_lat_va'][0],NWISinfo['dec_long_va'][0]
+        ws = streamstats.Watershed(lat=lat, lon=lon)
+
+        NWISindex = ['NWIS_site_id', 'Drainage_area_mi2', 'Mean_Basin_Elev_ft', 'Perc_Forest', 'Perc_Develop',
+                     'Perc_Imperv', 'Perc_Herbace', 'Perc_Slop_30', 'Mean_Ann_Precip_in', 'Ann_low_cfs', 'Ann_mean_cfs', 'Ann_hi_cfs']
         
+        
+        #get stream statististics
+        self.Param="00060"
+        StartYr='1970'
+        EndYr='2021'
+        
+        annual_stats = nwis.get_stats(sites=self.NWISsite,
+                              parameterCd=self.Param,
+                              statReportType='annual',
+                              startDt=StartYr,
+                              endDt=EndYr)
+
+        mean_ann_low = annual_stats[0].nsmallest(1, 'mean_va')
+        mean_ann_low = mean_ann_low['mean_va'].values[0]
+
+        mean_ann = np.round(np.mean(annual_stats[0]['mean_va']),0)
+
+        mean_ann_hi = annual_stats[0].nlargest(1, 'mean_va')
+        mean_ann_hi = mean_ann_hi['mean_va'].values[0]
+
+        
+
+        try:
+            darea = ws.get_characteristic('DRNAREA')['value']
+        except KeyError:
+            darea = 'na'
+        except ValueError:
+            darea = 'na'
+            
+        try:
+            elev = ws.get_characteristic('ELEV')['value']
+        except KeyError:
+            elev = 'na'
+        except ValueError:
+            elev = 'na'
+            
+        try:
+            forest = ws.get_characteristic('FOREST')['value']
+        except KeyError:
+            forest = 'na'
+        except ValueError:
+            forest = 'na'
+        
+        try:
+            dev_area = ws.get_characteristic('LC11DEV')['value']
+        except KeyError:
+            dev_area = 'na'
+        except ValueError:
+            dev_area = 'na'
+        
+        try:
+            imp_area = ws.get_characteristic('LC11IMP')['value']
+        except KeyError:
+            imp_area = 'na'
+        except ValueError:
+            imp_area = 'na'
+            
+        try:
+            herb_area = ws.get_characteristic('LU92HRBN')['value']
+        except KeyError:
+            herb_area = 'na'
+        except ValueError:
+            herb_area = 'na'
+            
+        try:
+            perc_slope = ws.get_characteristic('SLOP30_10M')['value']
+        except KeyError:
+            perc_slope = 'na'
+        except ValueError:
+            perc_slope = 'na'
+            
+        try:
+            precip = ws.get_characteristic('PRECIP')['value']
+        except KeyError:
+            precip = 'na'
+        except ValueError:
+            precip = 'na'
+        
+        #Put data into data frame and display
+        NWISvalues = [self.NWISsite,darea, elev,forest, dev_area, imp_area, herb_area, perc_slope, precip, mean_ann_low, mean_ann, mean_ann_hi]
+
+        Catchment_Stats = pd.DataFrame(data = NWISvalues, index = NWISindex)
+
+        self.Catchment_Stats = Catchment_Stats.T
+        display(self.Catchment_Stats)
+        
+        #plot the watershed
+        title = 'Catchment for USGS station: '+self.NWISsite
+        poly = gpd.GeoDataFrame.from_features(ws.boundary["features"], crs="EPSG:4326")
+        df = poly.to_crs(epsg=3857)
+        self.WatershedMap = df.explore(color = 'yellow', tiles = 'Stamen Terrain')
+        
+    def get_USGS_site_info(self, state):
+    
+        #url for state usgs id's
+        url = 'https://waterdata.usgs.gov/'+state+'/nwis/current/?type=flow&group_key=huc_cd'
+
+        NWIS_sites = pd.read_html(url)
+
+        NWIS_sites = pd.DataFrame(np.array(NWIS_sites)[1]).reset_index(drop = True)
+
+        cols = ['StationNumber', 'Station name','Date/Time','Gageheight, feet', 'Dis-charge, ft3/s']
+
+        self.NWIS_sites = NWIS_sites[cols].dropna()
+        
+        self.NWIS_sites = self.NWIS_sites.rename(columns ={'Station name':'station_name', 
+                                                               'Gageheight, feet': 'gageheight_ft',
+                                                               'Dis-charge, ft3/s':'Discharge_cfs'})
+        
+        self.NWIS_sites = self.NWIS_sites[self.NWIS_sites.gageheight_ft != '--']
+
+
+        self.NWIS_sites = self.NWIS_sites.set_index('StationNumber')
+
+        # Remove unnecessary site information
+        for i in self.NWIS_sites.index:
+            if len(str(i)) > 8:
+                self.NWIS_sites = self.NWIS_sites.drop(i)
+
+        #remove when confirmed it works
+       # NWIS_sites = NWIS_sites[2:3]
+
+        site_id = self.NWIS_sites.index
+
+        #set up Pandas DF for state streamstats
+
+        Streamstats_cols = ['NWIS_siteid', 'Drainage_area_mi2', 'Mean_Basin_Elev_ft', 'Perc_Forest', 'Perc_Develop',
+                         'Perc_Imperv', 'Perc_Herbace', 'Perc_Slop_30', 'Mean_Ann_Precip_in']
+
+        self.State_NWIS_Stats = pd.DataFrame(columns = Streamstats_cols)
+
+        pbar = ProgressBar()
+        for site in pbar(site_id):
+
+            siteinfo = self.NWIS_sites['station_name'][site]
+
+            print('Calculating the summary statistics of the catchment for ', siteinfo, ', USGS: ',site)
+            NWISinfo = nwis.get_record(sites=site, service='site')
+
+            lat, lon = NWISinfo['dec_lat_va'][0],NWISinfo['dec_long_va'][0]
+            ws = streamstats.Watershed(lat=lat, lon=lon)
+
+            NWISindex = ['NWIS_site_id', 'NWIS_sitename', 'Drainage_area_mi2', 'Mean_Basin_Elev_ft', 'Perc_Forest', 'Perc_Develop',
+                         'Perc_Imperv', 'Perc_Herbace', 'Perc_Slop_30', 'Mean_Ann_Precip_in', 'Ann_low_cfs', 'Ann_mean_cfs', 'Ann_hi_cfs']
+        
+        
+            #get stream statististics
+            self.Param="00060"
+            StartYr='1970'
+            EndYr='2021'
+
+            annual_stats = nwis.get_stats(sites=self.NWISsite,
+                                  parameterCd=self.Param,
+                                  statReportType='annual',
+                                  startDt=StartYr,
+                                  endDt=EndYr)
+
+            mean_ann_low = annual_stats[0].nsmallest(1, 'mean_va')
+            mean_ann_low = mean_ann_low['mean_va'].values[0]
+
+            mean_ann = np.round(np.mean(annual_stats[0]['mean_va']),0)
+
+            mean_ann_hi = annual_stats[0].nlargest(1, 'mean_va')
+            mean_ann_hi = mean_ann_hi['mean_va'].values[0]
+
+
+            try:
+                darea = ws.get_characteristic('DRNAREA')['value']
+            except KeyError:
+                darea = 'na'
+            except ValueError:
+                darea = 'na'
+
+            try:
+                elev = ws.get_characteristic('ELEV')['value']
+            except KeyError:
+                elev = 'na'
+            except ValueError:
+                elev = 'na'
+
+            try:
+                forest = ws.get_characteristic('FOREST')['value']
+            except KeyError:
+                forest = 'na'
+            except ValueError:
+                forest = 'na'
+
+            try:
+                dev_area = ws.get_characteristic('LC11DEV')['value']
+            except KeyError:
+                dev_area = 'na'
+            except ValueError:
+                dev_area = 'na'
+
+            try:
+                imp_area = ws.get_characteristic('LC11IMP')['value']
+            except KeyError:
+                imp_area = 'na'
+            except ValueError:
+                imp_area = 'na'
+
+            try:
+                herb_area = ws.get_characteristic('LU92HRBN')['value']
+            except KeyError:
+                herb_area = 'na'
+            except ValueError:
+                herb_area = 'na'
+
+            try:
+                perc_slope = ws.get_characteristic('SLOP30_10M')['value']
+            except KeyError:
+                perc_slope = 'na'
+            except ValueError:
+                perc_slope = 'na'
+
+            try:
+                precip = ws.get_characteristic('PRECIP')['value']
+            except KeyError:
+                precip = 'na'
+            except ValueError:
+                precip = 'na'
+
+
+            NWISvalues = [site,siteinfo, darea, elev,forest, dev_area, imp_area, herb_area, perc_slope, precip, mean_ann_low, mean_ann, mean_ann_hi]
+
+
+            Catchment_Stats = pd.DataFrame(data = NWISvalues, index = NWISindex).T
+
+            self.State_NWIS_Stats = self.State_NWIS_Stats.append(Catchment_Stats)
+
+        State_NWIS_Stats.to_csv(self.cwd+'/State_NWIS_StreamStats/'+state+'StreamStats.csv')
 
   
 
