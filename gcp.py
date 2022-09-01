@@ -38,13 +38,31 @@ class NWMData:
         self.bucket_name = bucket_name
 
     def daterange(self, start_date, end_date):
+        """
+        Iterator for generating dates
+        Parameters
+        ----------
+        start_date: str, YYYYMMDD format
+            Start date for getting the NWM data
+        end_date: str, YYYYMMDD format
+            End date for getting the NWM data
+
+        Returns
+        -------
+        date
+        """
         for n in range(int((end_date - start_date).days)+1):
             yield start_date + timedelta(n)
 
     @property
-    def configurations(self) -> list:
-        # Valid configurations compatible with this client
-        # TODO Find crosswalk for Alaska
+    def configurations(self):
+        """
+        Valid configurations
+
+        Returns
+        -------
+        List containing valid configurations
+        """
         return [
             'analysis_assim',
             'analysis_assim_extend',
