@@ -10,4 +10,11 @@ Author: Karnesh Jain
 
 """
 
+import xarray as xr
+import fsspec
+from datetime import datetime, timedelta
+from kerchunk.hdf import SingleHdf5ToZarr
+from kerchunk.combine import MultiZarrToZarr
 
+
+class NWMData:
