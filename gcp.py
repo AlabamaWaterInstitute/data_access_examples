@@ -20,3 +20,19 @@ class NWMData:
     """
     The NWMData class provides methods for querying NWM data on Google Cloud Platform.
     """
+
+    def __init__(self, bucket_name = 'national-water-model'):
+        """
+        Instantiate NWMData class
+
+        Parameters
+        ----------
+        bucket_name : str, default: 'national-water-model' (Google Cloud Bucket)
+
+        Returns
+        -------
+        A NWM data object.
+        """
+
+        # set bucket_name
+        self.bucket_name = bucket_name
