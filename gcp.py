@@ -40,6 +40,7 @@ class NWMData:
     def daterange(self, start_date, end_date):
         """
         Iterator for generating dates
+
         Parameters
         ----------
         start_date: str, YYYYMMDD format
@@ -53,6 +54,25 @@ class NWMData:
         """
         for n in range(int((end_date - start_date).days)+1):
             yield start_date + timedelta(n)
+
+    def get_dataset(self, start_date, end_date, configuration):
+        """
+        Method to get the NWM dataset
+
+        Parameters
+        ----------
+        start_date: str, YYYYMMDD format
+            Start date for getting the NWM data
+        end_date: str, YYYYMMDD format
+            End date for getting the NWM data
+        configuration: str
+            Particular model simulation or forecast configuration
+
+        Returns
+        -------
+        ds: xarray.Dataset
+            The dataset containing NWM data for queried configuration from start to end date.
+        """
 
     @property
     def configurations(self):
