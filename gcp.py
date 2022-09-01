@@ -74,6 +74,13 @@ class NWMData:
             The dataset containing NWM data for queried configuration from start to end date.
         """
 
+        # Validate configuration
+        if configuration not in self.configurations:
+            message = f'Invalid configuration. Must select from {str(self.configurations)}'
+            raise ValueError(message)
+
+
+
     @property
     def configurations(self):
         """
