@@ -79,7 +79,23 @@ class NWMData:
             message = f'Invalid configuration. Must select from {str(self.configurations)}'
             raise ValueError(message)
 
+        files = self.get_files(start_date, end_date, configuration)
 
+    def get_files(self, start_date, end_date, configuration):
+        """
+
+        Parameters
+        ----------
+        start_date
+        end_date
+        configuration
+
+        Returns
+        -------
+
+        """
+        files = []
+        return files
 
     @property
     def configurations(self):
