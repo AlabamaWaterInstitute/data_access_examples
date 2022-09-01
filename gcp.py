@@ -17,7 +17,6 @@ from kerchunk.combine import MultiZarrToZarr
 
 
 class NWMData:
-    """Google Cloud Storage client class.
-    The NWMData class provides various methods for querying and retrieving data from the NWM dataset
-    on Google Cloud Platform.
+    """
+    The NWMData class provides methods for querying NWM data on Google Cloud Platform.
     """
