@@ -81,6 +81,31 @@ class NWMData:
 
         files = self.get_files(start_date, end_date, configuration)
 
+        open_files = fsspec.open_files(files)
+        out_zarr = []
+        for file in open_files:
+            with file as f:
+                out_zarr.append(SingleHdf5ToZarr(f, file.path).translate())
+
+        mzz = MultiZarrToZarr(out_zarr,
+                              remote_protocol='gcs',
+                              concat_dims=['time', 'reference_time'],
+                              )
+
+        combined_dataset = mzz.translate()
+
+        backend_args = {"consolidated": False,
+                        "storage_options": {"fo": combined_dataset,
+                                            "remote_protocol": "gcs",
+                                            "remote_options": {'anon': True}}}
+
+        ds = xr.open_dataset(
+            "reference://", engine="zarr",
+            backend_kwargs=backend_args
+        )
+
+        return ds
+
     def get_files(self, start_date, end_date, configuration):
         """
 
