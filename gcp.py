@@ -124,7 +124,18 @@ class NWMData:
             List of files corresponding to the particular configuration for the date range specified.
 
         """
+        fs = fsspec.filesystem('gcs', anon=True)
         files = []
+
+        start = datetime.strptime(start_date, '%Y%m%d').date()
+        end = datetime.strptime(end_date, '%Y%m%d').date()
+
+        for date in self.daterange(start, end):
+            date_str = date.strftime('%Y%m%d')
+            for time in range(0, 24, 6):
+                for f in range(1, 240):
+                    files.append(f'gcs://national-water-model/nwm.{date_str}/medium_range_mem1/nwm.t{time:02d}z.medium_range.channel_rt_1.f{f:03d}.conus.nc')
+
         return files
 
     @property
