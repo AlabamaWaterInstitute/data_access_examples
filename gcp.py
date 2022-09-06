@@ -86,12 +86,17 @@ class NWMData:
 
         Parameters
         ----------
-        start_date
-        end_date
-        configuration
+        start_date: str, YYYYMMDD format
+            Start date for getting the NWM data
+        end_date: str, YYYYMMDD format
+            End date for getting the NWM data
+        configuration: str
+            Particular model simulation or forecast configuration
 
         Returns
         -------
+        files: list (str)
+            List of files corresponding to the particular configuration for the date range specified.
 
         """
         files = []
