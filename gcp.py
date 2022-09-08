@@ -132,9 +132,17 @@ class NWMData:
 
         for date in self.daterange(start, end):
             date_str = date.strftime('%Y%m%d')
-            for time in range(0, 24, 6):
-                for f in range(1, 240):
-                    files.append(f'gcs://national-water-model/nwm.{date_str}/medium_range_mem1/nwm.t{time:02d}z.medium_range.channel_rt_1.f{f:03d}.conus.nc')
+            for time in self.configurations[configuration]['t']:
+                if 'analysis' in configuration:
+                    for tm in self.configurations[configuration]['tm']:
+                        files.append(f'gcs://national-water-model/nwm.{date_str}/{configuration}/nwm.t{time:02d}z.'
+                                     f'{self.configurations[configuration]["fname_config"]}.channel_rt.tm{tm:02d}.'
+                                     f'conus.nc')
+                else:
+                    for f in self.configurations[configuration]['f']:
+                        files.append(f'gcs://national-water-model/nwm.{date_str}/{configuration}/nwm.t{time:02d}z.'
+                                     f'{self.configurations[configuration]["fname_config"]}.channel_rt_1.f{f:03d}.'
+                                     f'conus.nc')
 
         return files
 
@@ -145,35 +153,35 @@ class NWMData:
 
         Returns
         -------
-        List containing valid configurations
+        Dictionary containing valid configurations with forcast/analysis time details
         """
-        return [
-            'analysis_assim',
-            'analysis_assim_extend',
-            'analysis_assim_hawaii',
-            'analysis_assim_long',
-            'analysis_assim_puertorico',
-            'long_range_mem1',
-            'long_range_mem2',
-            'long_range_mem3',
-            'long_range_mem4',
-            'medium_range_mem1',
-            'medium_range_mem2',
-            'medium_range_mem3',
-            'medium_range_mem4',
-            'medium_range_mem5',
-            'medium_range_mem6',
-            'medium_range_mem7',
-            'short_range',
-            'short_range_hawaii',
-            'short_range_puertorico',
-            'analysis_assim_no_da',
-            'analysis_assim_extend_no_da',
-            'analysis_assim_hawaii_no_da',
-            'analysis_assim_long_no_da',
-            'analysis_assim_puertorico_no_da',
-            'medium_range_no_da',
-            'short_range_hawaii_no_da',
-            'short_range_puertorico_no_da'
-        ]
+        return {
+            'analysis_assim': {'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_extend':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_hawaii':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_long':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_puertorico':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'long_range_mem1':{'t': range(0,24,1), 'f': range(0, 720, 6), 'var': 'channel_rt_1', 'fname_config': 'long_range'},
+            'long_range_mem2':{'t': range(0,24,1), 'f': range(0, 720, 6), 'var': 'channel_rt_1', 'fname_config': 'long_range'},
+            'long_range_mem3':{'t': range(0,24,1), 'f': range(0, 720, 6), 'var': 'channel_rt_1', 'fname_config': 'long_range'},
+            'long_range_mem4':{'t': range(0,24,1), 'f': range(0, 720, 6), 'var': 'channel_rt_1', 'fname_config': 'long_range'},
+            'medium_range_mem1':{'t': range(0,24,1), 'f': range(0, 240, 6), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'medium_range_mem2':{'t': range(0,24,1), 'f': range(0, 240, 6), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'medium_range_mem3':{'t': range(0,24,1), 'f': range(0, 240, 6), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'medium_range_mem4':{'t': range(0,24,1), 'f': range(0, 240, 6), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'medium_range_mem5':{'t': range(0,24,1), 'f': range(0, 240, 6), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'medium_range_mem6':{'t': range(0,24,1), 'f': range(0, 240, 6), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'medium_range_mem7':{'t': range(0,24,1), 'f': range(0, 240, 6), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'short_range':{'t': range(0,24,1), 'f': range(0,2), 'var': 'channel_rt', 'fname_config': 'short_range'},
+            'short_range_hawaii':{'t': range(0,24,1), 'f': range(0,2), 'var': 'channel_rt', 'fname_config': 'short_range'},
+            'short_range_puertorico':{'t': range(0,24,1), 'f': range(0,2), 'var': 'channel_rt', 'fname_config': 'short_range'},
+            'analysis_assim_no_da':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_extend_no_da':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_hawaii_no_da':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_long_no_da':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'analysis_assim_puertorico_no_da':{'t': range(0,24,1), 'tm': range(0,2), 'var': 'channel_rt', 'fname_config': 'analysis_assim'},
+            'medium_range_no_da':{'t': range(0,24,1), 'f': range(0,2), 'var': 'channel_rt', 'fname_config': 'medium_range'},
+            'short_range_hawaii_no_da':{'t': range(0,24,1), 'f': range(0,2), 'var': 'channel_rt', 'fname_config': 'short_range'},
+            'short_range_puertorico_no_da':{'t': range(0,24,1), 'f': range(0,2), 'var': 'channel_rt', 'fname_config': 'short_range'}
+        }
 
