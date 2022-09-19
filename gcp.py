@@ -136,12 +136,12 @@ class NWMData:
                 if 'analysis' in configuration:
                     for tm in self.configurations[configuration]['tm']:
                         files.append(f'gcs://{self.bucket_name}/nwm.{date_str}/{configuration}/nwm.t{time:02d}z.'
-                                     f'{self.configurations[configuration]["fname_config"]}.channel_rt.tm{tm:02d}.'
+                                     f'{self.configurations[configuration]["fname_config"]}.{self.configurations[configuration]["var"]}.tm{tm:02d}.'
                                      f'conus.nc')
                 else:
                     for f in self.configurations[configuration]['f']:
                         files.append(f'gcs://{self.bucket_name}/nwm.{date_str}/{configuration}/nwm.t{time:02d}z.'
-                                     f'{self.configurations[configuration]["fname_config"]}.channel_rt_1.f{f:03d}.'
+                                     f'{self.configurations[configuration]["fname_config"]}.{self.configurations[configuration]["var"]}.f{f:03d}.'
                                      f'conus.nc')
 
         return files
@@ -156,7 +156,7 @@ class NWMData:
         Dictionary containing valid configurations with forcast/analysis time details
         """
         return {
-            'analysis_assim': {'t': range(0, 24), 'tm': range(0, 2), 'var': 'channel_rt',
+            'analysis_assim': {'t': range(0, 24), 'tm': range(0, 3), 'var': 'channel_rt',
                                'fname_config': 'analysis_assim'},
             'long_range_mem1': {'t': range(0, 24, 6), 'f': range(0, 720, 6), 'var': 'channel_rt_1',
                                 'fname_config': 'long_range'},
