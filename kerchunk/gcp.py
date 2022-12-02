@@ -43,17 +43,19 @@ class NWMData:
 
         Parameters
         ----------
-        start_date: str, YYYYMMDD format
+        start_date: datetime or date
             Start date for getting the NWM data
-        end_date: str, YYYYMMDD format
+        end_date: datetime or date
             End date for getting the NWM data
 
         Returns
         -------
         date
         """
-        for n in range(int((end_date - start_date).days) + 1):
-            yield start_date + timedelta(n)
+        cur_date = start_date
+        while cur_date <= end_date:
+            yield cur_date
+            cur_date += timedelta(days=1)
 
     def get_dataset(self, start_date, end_date, configuration):
         """
@@ -127,8 +129,8 @@ class NWMData:
         fs = fsspec.filesystem('gcs', anon=True)
         files = []
 
-        start = datetime.strptime(start_date, '%Y%m%d').date()
-        end = datetime.strptime(end_date, '%Y%m%d').date()
+        start = datetime.strptime(start_date, '%Y%m%d')
+        end = datetime.strptime(end_date, '%Y%m%d')
 
         for date in self.daterange(start, end):
             date_str = date.strftime('%Y%m%d')
