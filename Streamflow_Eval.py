@@ -173,58 +173,42 @@ class Reach_Eval():
 
         try:
             darea = ws.get_characteristic('DRNAREA')['value']
-        except KeyError:
-            darea = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             darea = 'na'
             
         try:
             elev = ws.get_characteristic('ELEV')['value']
-        except KeyError:
-            elev = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             elev = 'na'
             
         try:
             forest = ws.get_characteristic('FOREST')['value']
-        except KeyError:
-            forest = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             forest = 'na'
         
         try:
             dev_area = ws.get_characteristic('LC11DEV')['value']
-        except KeyError:
-            dev_area = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             dev_area = 'na'
         
         try:
             imp_area = ws.get_characteristic('LC11IMP')['value']
-        except KeyError:
-            imp_area = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             imp_area = 'na'
             
         try:
             herb_area = ws.get_characteristic('LU92HRBN')['value']
-        except KeyError:
-            herb_area = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             herb_area = 'na'
             
         try:
             perc_slope = ws.get_characteristic('SLOP30_10M')['value']
-        except KeyError:
-            perc_slope = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             perc_slope = 'na'
             
         try:
             precip = ws.get_characteristic('PRECIP')['value']
-        except KeyError:
-            precip = 'na'
-        except ValueError:
+        except (KeyError, ValueError):
             precip = 'na'
         
         #Put data into data frame and display
@@ -317,60 +301,43 @@ class Reach_Eval():
 
             try:
                 darea = ws.get_characteristic('DRNAREA')['value']
-            except KeyError:
-                darea = 'na'
-            except ValueError:
+            except (KeyError, ValueError):
                 darea = 'na'
 
             try:
                 elev = ws.get_characteristic('ELEV')['value']
-            except KeyError:
-                elev = 'na'
-            except ValueError:
+            except (KeyError, ValueError):
                 elev = 'na'
 
             try:
                 forest = ws.get_characteristic('FOREST')['value']
-            except KeyError:
-                forest = 'na'
-            except ValueError:
+            except (KeyError, ValueError):
                 forest = 'na'
 
             try:
                 dev_area = ws.get_characteristic('LC11DEV')['value']
-            except KeyError:
-                dev_area = 'na'
-            except ValueError:
+            except (KeyError, ValueError):
                 dev_area = 'na'
 
             try:
                 imp_area = ws.get_characteristic('LC11IMP')['value']
-            except KeyError:
-                imp_area = 'na'
-            except ValueError:
+            except (KeyError, ValueError):
                 imp_area = 'na'
 
             try:
                 herb_area = ws.get_characteristic('LU92HRBN')['value']
-            except KeyError:
-                herb_area = 'na'
-            except ValueError:
+            except (KeyError, ValueError):
                 herb_area = 'na'
 
             try:
                 perc_slope = ws.get_characteristic('SLOP30_10M')['value']
-            except KeyError:
-                perc_slope = 'na'
-            except ValueError:
+            except (KeyError, ValueError):
                 perc_slope = 'na'
 
             try:
                 precip = ws.get_characteristic('PRECIP')['value']
-            except KeyError:
+            except (KeyError, ValueError):
                 precip = 'na'
-            except ValueError:
-                precip = 'na'
-
 
             NWISvalues = [site,siteinfo, darea, elev,forest, dev_area, imp_area, herb_area, perc_slope, precip, mean_ann_low, mean_ann, mean_ann_hi]
 
@@ -382,5 +349,3 @@ class Reach_Eval():
         State_NWIS_Stats.to_csv(self.cwd+'/State_NWIS_StreamStats/'+state+'StreamStats.csv')
 
   
-
-
