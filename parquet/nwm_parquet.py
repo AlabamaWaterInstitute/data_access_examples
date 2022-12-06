@@ -74,23 +74,23 @@ def get_nwm_data(files, outfile, store=True, parquet=False, dataframe=True, comp
 
     if store:
         df.to_parquet(
-            "gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile,
+            "gs://awi-ciroh-persistent/nwm_parquet/"+outfile,
             engine="pyarrow", compression=compression
         )
 
     if dataframe and parquet:
         df_nwm = pd.read_parquet(
-            "gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile,
+            "gs://awi-ciroh-persistent/nwm_parquet/"+outfile,
             engine='pyarrow'
         )
-        parquet_file = ParquetFile("gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile)
+        parquet_file = ParquetFile("gs://awi-ciroh-persistent/nwm_parquet/"+outfile)
         return df_nwm, parquet_file
     elif parquet:
-        parquet_file = ParquetFile("gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile)
+        parquet_file = ParquetFile("gs://awi-ciroh-persistent/nwm_parquet/"+outfile)
         return parquet_file
 
     df_nwm = pd.read_parquet(
-        "gs://awi-ciroh-persistent/arpita0911patel/data/" + outfile,
+        "gs://awi-ciroh-persistent/nwm_parquet/" + outfile,
         engine='pyarrow'
     )
 
