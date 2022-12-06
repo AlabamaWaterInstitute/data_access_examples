@@ -8,14 +8,13 @@ NWM Data: https://console.cloud.google.com/marketplace/details/noaa-public/natio
 """
 
 import pandas as pd
-import dask.dataframe as dd
 import ujson
 import fsspec
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 
 
-def get_nwm_data(files, parquet=False, dataframe=True):
+def get_nwm_data(files, parquet=False, dataframe=True, outfile):
     """
     Method to convert NWM data to parquet and output in parquet or dataframe format.
 
@@ -71,16 +70,14 @@ def get_nwm_data(files, parquet=False, dataframe=True):
         )
 
     if dataframe and parquet:
-        file_name = "parquet_medium_range_mem1_channel_rt_t18z_20220901.parquet"
-        data_parquet = dd.read_parquet(
-            "gs://awi-ciroh-persistent/arpita0911patel/data/"+file_name,
+        data_parquet = pd.read_parquet(
+            "gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile,
             engine='pyarrow'
         )
         return df, data_parquet
     elif parquet:
-        file_name = "parquet_medium_range_mem1_channel_rt_t18z_20220901.parquet"
-        data_parquet = dd.read_parquet(
-            "gs://awi-ciroh-persistent/arpita0911patel/data/" + file_name,
+        data_parquet = pd.read_parquet(
+            "gs://awi-ciroh-persistent/arpita0911patel/data/" + outfile,
             engine='pyarrow'
         )
         return data_parquet
