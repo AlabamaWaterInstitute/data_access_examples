@@ -14,9 +14,10 @@ import ujson
 import fsspec
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
+from pyarrow.parquet import ParquetFile
 
 
-def get_nwm_data(files, outfile, parquet=False, dataframe=True, compression= "zstd"):
+def get_nwm_data(files, outfile, parquet=False, dataframe=True, compression="zstd"):
     """
     Method to convert NWM data to parquet and output in parquet or dataframe format.
 
@@ -69,26 +70,28 @@ def get_nwm_data(files, outfile, parquet=False, dataframe=True, compression= "zs
     df = ds.to_dataframe()
 
     if parquet:
-        file_name = "parquet_medium_range_mem1_channel_rt_t18z_20220901.parquet"
         df.to_parquet(
-            "gs://awi-ciroh-persistent/arpita0911patel/data/"+file_name,
-            engine="pyarrow", compression="snappy"
+            "gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile,
+            engine="pyarrow", compression=compression
         )
 
     if dataframe and parquet:
-        data_parquet = pd.read_parquet(
+        df_nwm = pd.read_parquet(
             "gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile,
             engine='pyarrow'
         )
-        return df, data_parquet
+        parquet_file = ParquetFile("gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile)
+        return df_nwm, parquet_file
     elif parquet:
-        data_parquet = pd.read_parquet(
-            "gs://awi-ciroh-persistent/arpita0911patel/data/" + outfile,
-            engine='pyarrow'
-        )
-        return data_parquet
+        parquet_file = ParquetFile("gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile)
+        return parquet_file
 
-    return df
+    df_nwm = pd.read_parquet(
+        "gs://awi-ciroh-persistent/arpita0911patel/data/" + outfile,
+        engine='pyarrow'
+    )
+
+    return df_nwm
 
 
 def gen_json(u, fs, outf=None):
