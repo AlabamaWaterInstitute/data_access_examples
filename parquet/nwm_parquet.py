@@ -5,8 +5,6 @@ from Google Cloud Platform (GCP) to Parquet format. Also, it can output NWM data
 
 NWM Data: https://console.cloud.google.com/marketplace/details/noaa-public/national-water-model
 
-Author: Karnesh Jain
-
 """
 
 import pandas as pd
