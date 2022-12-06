@@ -5,6 +5,8 @@ from Google Cloud Platform (GCP) to Parquet format. Also, it can output NWM data
 
 NWM Data: https://console.cloud.google.com/marketplace/details/noaa-public/national-water-model
 
+Author: Karnesh Jain
+
 """
 
 import pandas as pd
@@ -14,7 +16,7 @@ import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 
 
-def get_nwm_data(files, parquet=False, dataframe=True, outfile):
+def get_nwm_data(files, outfile, parquet=False, dataframe=True, compression= "zstd"):
     """
     Method to convert NWM data to parquet and output in parquet or dataframe format.
 
@@ -26,6 +28,10 @@ def get_nwm_data(files, parquet=False, dataframe=True, outfile):
         Whether to output NWM data in parquet format?
     dataframe: bool
         Whether to output NWM data as a dataframe?
+    outfile: str
+        Name of parquet file to be written on GCP
+    compression: str
+        Format for parquet file compression
 
     Returns
     -------
