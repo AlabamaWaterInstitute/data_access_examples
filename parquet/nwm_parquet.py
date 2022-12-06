@@ -4,6 +4,7 @@ This module contains methods to convert National Water Model (NWM) data
 from Google Cloud Platform (GCP) to Parquet format. Also, it can output NWM data in Parquet format or as a Dataframe.
 
 NWM Data: https://console.cloud.google.com/marketplace/details/noaa-public/national-water-model
+AWI Cloud bucket: awi-ciroh-persistent
 
 Author: Karnesh Jain
 
