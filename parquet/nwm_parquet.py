@@ -1,5 +1,4 @@
 import pandas as pd
-from pyarrow.parquet import ParquetFile
 import dask.dataframe as dd
 import ujson
 import fsspec
@@ -34,26 +33,27 @@ def get_nwm_data(files, parquet=False, dataframe=True):
                 backend_kwargs=backend_args,
             )
         )
+
     ds = xr.concat(fds, dim="time")
 
     df = ds.to_dataframe()
 
     if parquet:
-        file_name = "parquet_med_range_mem1_channel_rt_t18z_20220901.parquet"
+        file_name = "parquet_medium_range_mem1_channel_rt_t18z_20220901.parquet"
         df.to_parquet(
             "gs://awi-ciroh-persistent/arpita0911patel/data/"+file_name,
             engine="pyarrow", compression="snappy"
         )
 
     if dataframe and parquet:
-        file_name = "parquet_med_range_mem1_channel_rt_t18z_20220901.parquet"
+        file_name = "parquet_medium_range_mem1_channel_rt_t18z_20220901.parquet"
         data_parquet = dd.read_parquet(
             "gs://awi-ciroh-persistent/arpita0911patel/data/"+file_name,
             engine='pyarrow'
         )
         return df, data_parquet
     elif parquet:
-        file_name = "parquet_med_range_mem1_channel_rt_t18z_20220901.parquet"
+        file_name = "parquet_medium_range_mem1_channel_rt_t18z_20220901.parquet"
         data_parquet = dd.read_parquet(
             "gs://awi-ciroh-persistent/arpita0911patel/data/" + file_name,
             engine='pyarrow'
