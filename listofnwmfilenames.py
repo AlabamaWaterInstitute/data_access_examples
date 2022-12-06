@@ -485,7 +485,6 @@ def main():
     runinput = 2
 
     varinput = 2
-    breakpoint()
     print(create_file_list(start_date, end_date, runinput, varinput, geoinput, memdict))
     
     
