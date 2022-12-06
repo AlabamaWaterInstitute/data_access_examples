@@ -18,7 +18,7 @@ from kerchunk.hdf import SingleHdf5ToZarr
 from pyarrow.parquet import ParquetFile
 
 
-def get_nwm_data(files, outfile, parquet=False, dataframe=True, compression="zstd"):
+def get_nwm_data(files, outfile, store=True, parquet=False, dataframe=True, compression="zstd"):
     """
     Method to convert NWM data to parquet and output in parquet or dataframe format.
 
@@ -26,12 +26,14 @@ def get_nwm_data(files, outfile, parquet=False, dataframe=True, compression="zst
     ----------
     files : list str
         List of files with path
+    outfile: str
+        Name of parquet file to be written on GCP
+    store: bool
+        Whether to store parquet file on GCP?
     parquet : bool
         Whether to output NWM data in parquet format?
     dataframe: bool
         Whether to output NWM data as a dataframe?
-    outfile: str
-        Name of parquet file to be written on GCP
     compression: str
         Format for parquet file compression
 
@@ -70,7 +72,7 @@ def get_nwm_data(files, outfile, parquet=False, dataframe=True, compression="zst
 
     df = ds.to_dataframe()
 
-    if parquet:
+    if store:
         df.to_parquet(
             "gs://awi-ciroh-persistent/arpita0911patel/data/"+outfile,
             engine="pyarrow", compression=compression
