@@ -1,3 +1,14 @@
+"""
+
+This module contains methods to convert National Water Model (NWM) data
+from Google Cloud Platform (GCP) to Parquet format. Also, it can output NWM data in Parquet format or as a Dataframe.
+
+NWM Data: https://console.cloud.google.com/marketplace/details/noaa-public/national-water-model
+
+Author: Karnesh Jain
+
+"""
+
 import pandas as pd
 import dask.dataframe as dd
 import ujson
@@ -7,6 +18,22 @@ from kerchunk.hdf import SingleHdf5ToZarr
 
 
 def get_nwm_data(files, parquet=False, dataframe=True):
+    """
+    Method to convert NWM data to parquet and output in parquet or dataframe format.
+
+    Parameters
+    ----------
+    files : list str
+        List of files with path
+    parquet : bool
+        Whether to output NWM data in parquet format?
+    dataframe: bool
+        Whether to output NWM data as a dataframe?
+
+    Returns
+    -------
+    NWM data either in parquet format, as a dataframe or both.
+    """
 
     fs = fsspec.filesystem("gcs", anon=True)
 
@@ -64,8 +91,23 @@ def get_nwm_data(files, parquet=False, dataframe=True):
 
 
 def gen_json(u, fs, outf=None):
+    """
+    Method to generate JSON object
 
-    fs = fsspec.filesystem("gcs", anon=True)
+    Parameters
+    ----------
+    u : str
+        File name to convert to JSON object
+    fs : Object
+        GCP file system instance
+    outf: bool
+        Whether to write JSON object to a file
+
+    Returns
+    -------
+    JSON object
+    """
+
     so = dict(mode="rb", anon=True, default_fill_cache=False, default_cache_type="first")
 
     with fs.open(u, **so) as infile:
