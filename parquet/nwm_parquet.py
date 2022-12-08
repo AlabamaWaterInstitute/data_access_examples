@@ -15,10 +15,9 @@ import ujson
 import fsspec
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
-from pyarrow.parquet import ParquetFile
 
 
-def get_nwm_data(files, outfile, store=True, parquet=False, dataframe=True, compression="zstd"):
+def get_nwm_data(files, outfile, store=True, dataframe=True, compression="zstd"):
     """
     Method to convert NWM data to parquet and output in parquet or dataframe format.
 
@@ -30,8 +29,6 @@ def get_nwm_data(files, outfile, store=True, parquet=False, dataframe=True, comp
         Name of parquet file to be written on GCP
     store: bool
         Whether to store parquet file on GCP?
-    parquet : bool
-        Whether to output NWM data in parquet format?
     dataframe: bool
         Whether to output NWM data as a dataframe?
     compression: str
@@ -78,23 +75,12 @@ def get_nwm_data(files, outfile, store=True, parquet=False, dataframe=True, comp
             engine="pyarrow", compression=compression
         )
 
-    if dataframe and parquet:
+    if dataframe:
         df_nwm = pd.read_parquet(
             "gs://awi-ciroh-persistent/nwm_parquet/"+outfile,
             engine='pyarrow'
         )
-        parquet_file = ParquetFile("gs://awi-ciroh-persistent/nwm_parquet/"+outfile)
-        return df_nwm, parquet_file
-    elif parquet:
-        parquet_file = ParquetFile("gs://awi-ciroh-persistent/nwm_parquet/"+outfile)
-        return parquet_file
-
-    df_nwm = pd.read_parquet(
-        "gs://awi-ciroh-persistent/nwm_parquet/" + outfile,
-        engine='pyarrow'
-    )
-
-    return df_nwm
+        return df_nwm
 
 
 def gen_json(u, fs, outf=None):
