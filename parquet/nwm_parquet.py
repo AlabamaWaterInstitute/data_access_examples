@@ -76,11 +76,7 @@ def get_nwm_data(files, outfile, store=True, dataframe=True, compression="zstd")
         )
 
     if dataframe:
-        df_nwm = pd.read_parquet(
-            "gs://awi-ciroh-persistent/nwm_parquet/"+outfile,
-            engine='pyarrow'
-        )
-        return df_nwm
+        return df
 
 
 def gen_json(u, fs, outf=None):
