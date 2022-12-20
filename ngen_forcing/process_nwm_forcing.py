@@ -5,6 +5,7 @@ from rasterstats import zonal_stats
 # import rasterio
 import pandas as pd
 
+from pathlib import Path
 import warnings
 warnings.simplefilter("ignore")
 
@@ -27,18 +28,23 @@ warnings.simplefilter("ignore")
 #         fcst_cycle,
 #     )
 
-#for file in list_of_files:
-fc_nc = ("nwm.t00z.medium_range.forcing.f001.conus.nc")
-fc_xds = xr.open_dataset(fc_nc)
+"""
+A set of test files can be generated downloading these files
+wget -P data -c https://storage.googleapis.com/national-water-model/nwm.20220824/forcing_medium_range/nwm.t12z.medium_range.forcing.f001.conus.nc
+wget -P data -c https://storage.googleapis.com/national-water-model/nwm.20220824/forcing_medium_range/nwm.t12z.medium_range.forcing.f002.conus.nc
+wget -P data -c https://storage.googleapis.com/national-water-model/nwm.20220824/forcing_medium_range/nwm.t12z.medium_range.forcing.f003.conus.nc
+"""
 
-reng = "rasterio"
-fc_xds = xr.open_dataset(fc_nc, engine=reng)
+folder_prefix = Path('data')
+list_of_files = [
+    "nwm.t12z.medium_range.forcing.f001.conus.nc",
+    "nwm.t12z.medium_range.forcing.f002.conus.nc",
+    "nwm.t12z.medium_range.forcing.f003.conus.nc",
+]
 
 # Read basin boundary file
 f_03 = "03w/nextgen_03W.gpkg"
-
-gpkg_03w_divides = gpd.read_file(f_03, layer="divides")
-
+gpkg_divides = gpd.read_file(f_03, layer="divides")
 list_of_vars = [
     "U2D"      ,
     "V2D"     ,
@@ -52,16 +58,26 @@ list_of_vars = [
 
 df_dict = {}
 for _v in list_of_vars:
-    with xr.open_dataset(fc_nc, engine=reng) as _xds:
-        _src = _xds[_v]
-        _aff2 = _src.rio.transform()
-        _arr2 = _src.values[0]
-        _df_zonal_stats = pd.DataFrame(zonal_stats(gpkg_03w_divides, _arr2, affine=_aff2))
-    
-    df_dict[_v] = pd.DataFrame(index=_df_zonal_stats.index)
-    # adding statistics back to original GeoDataFrame
-    # gdf3 = pd.concat([gpkg_03w_divides, _df_zonal_stats], axis=1)
-    df_dict[_v][fc_xds.time.values[0]]=_df_zonal_stats["mean"]
+    df_dict[_v] = pd.DataFrame(index=gpkg_divides.index)
+
+reng = "rasterio"
+sum_stat = "mean"
+
+for _nc_file in list_of_files:
+    # _nc_file = ("nwm.t00z.medium_range.forcing.f001.conus.nc")
+    _full_nc_file = (folder_prefix.joinpath(_nc_file))
+
+    with xr.open_dataset(_full_nc_file, engine=reng) as _xds:
+        for _v in list_of_vars:
+            _src = _xds[_v]
+            _aff2 = _src.rio.transform()
+            _arr2 = _src.values[0]
+
+            breakpoint()
+            _df_zonal_stats = pd.DataFrame(zonal_stats(gpkg_divides, _arr2, affine=_aff2))
+            # if adding statistics back to original GeoDataFrame
+            # gdf3 = pd.concat([gpkg_divides, _df_zonal_stats], axis=1)
+            df_dict[_v][_xds.time.values[0]]=_df_zonal_stats[sum_stat]
 
 # TODO: Convert the output to CSV with something like
 # `gdf3.to_csv`
