@@ -106,10 +106,10 @@ def main():
         "SWDOWN",
     ]
 
-    file_list = list_of_files[0:30]
-    gpkg_subset = gpkg_divides[0:2000]
-    #file_list = list_of_files[0:3]
-    #gpkg_subset = gpkg_divides[0:20]
+    # file_list = list_of_files[0:30]
+    # gpkg_subset = gpkg_divides[0:2000]
+    file_list = list_of_files[0:3]
+    gpkg_subset = gpkg_divides[0:200]
     feature_list = gpkg_subset.geometry.to_list()
 
     # start_time = time.time()
@@ -132,14 +132,26 @@ def main():
     print(time.time() - start_time)
 
     start_time = time.time()
-    print(f"Working on the new way with threading. (It's not much better.)")
+    print(f"Working on the new way with threading parallel.")
     fd3 = get_forcing_dict_newway_parallel(
         feature_list,
         folder_prefix,
         file_list,
-        )
+        para="thread",
+        para_n=16,
+    )
     print(time.time() - start_time)
 
+    start_time = time.time()
+    print(f"Working on the new way with process parallel.")
+    fd3 = get_forcing_dict_newway_parallel(
+        feature_list,
+        folder_prefix,
+        file_list,
+        para="process",
+        para_n=16,
+    )
+    print(time.time() - start_time)
 
     start_time = time.time()
     print(f"Working on the new way with loops reversed.")
@@ -151,11 +163,24 @@ def main():
     print(time.time() - start_time)
 
     start_time = time.time()
-    print(f"Working on the new way with loops reversed with threading.")
+    print(f"Working on the new way with loops reversed with threading parallel.")
     fd4 = get_forcing_dict_newway_inverted_parallel(
         feature_list,
         folder_prefix,
         file_list,
+        para="thread",
+        para_n=16,
+    )
+    print(time.time() - start_time)
+
+    start_time = time.time()
+    print(f"Working on the new way with loops reversed with process parallel.")
+    fd4 = get_forcing_dict_newway_inverted_parallel(
+        feature_list,
+        folder_prefix,
+        file_list,
+        para="process",
+        para_n=16,
     )
     print(time.time() - start_time)
 

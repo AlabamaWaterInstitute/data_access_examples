@@ -48,10 +48,12 @@ def get_forcing_dict_newway(
 
 
 def get_forcing_dict_newway_parallel(
-        feature_list,
-        folder_prefix,
-        file_list,
-        ):
+    feature_list,
+    folder_prefix,
+    file_list,
+    para="thread",
+    para_n=2,
+):
 
     reng = "rasterio"
     _xds = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
@@ -67,8 +69,14 @@ def get_forcing_dict_newway_parallel(
     )
     filehandles = [xr.open_dataset("data/" + f) for f in file_list]
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    if para == "process":
+        pool = concurrent.futures.ProcessPoolExecutor
+    elif para == "thread":
+        pool = concurrent.futures.ThreadPoolExecutor
+    else:
+        pool = concurrent.futures.ThreadPoolExecutor
+
+    with pool(max_workers=para_n) as executor:
         stats = []
         future_list = []
 
@@ -130,10 +138,12 @@ def get_forcing_dict_newway_inverted(
 
 
 def get_forcing_dict_newway_inverted_parallel(
-        feature_list,
-        folder_prefix,
-        file_list,
-        ):
+    feature_list,
+    folder_prefix,
+    file_list,
+    para="thread",
+    para_n=2,
+):
 
     import concurrent.futures
 
@@ -161,8 +171,14 @@ def get_forcing_dict_newway_inverted_parallel(
     stats = []
     future_list = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    if para == "process":
+        pool = concurrent.futures.ProcessPoolExecutor
+    elif para == "thread":
+        pool = concurrent.futures.ThreadPoolExecutor
+    else:
+        pool = concurrent.futures.ThreadPoolExecutor
+
+    with pool(max_workers=para_n) as executor:
 
         for f in filehandles:
             print(f"{i}, {round(i/len(file_list), 2)*100}".ljust(40), end="\r")
