@@ -8,7 +8,7 @@ import pandas as pd
 
 import time
 
-from TestConvert_NWMForcing_to_Ngen import (
+from process_nwm_forcing_to_ngen import (
     get_forcing_dict_newway,
     get_forcing_dict_newway_parallel,
     get_forcing_dict_newway_inverted,
