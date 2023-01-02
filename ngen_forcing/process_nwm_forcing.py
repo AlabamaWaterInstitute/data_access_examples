@@ -112,6 +112,8 @@ def main():
     gpkg_subset = gpkg_divides[0:200]
     feature_list = gpkg_subset.geometry.to_list()
 
+    # This way is extremely slow for anything more than a
+    # few files, so we comment it out of the test
     # start_time = time.time()
     # print(f"Working on the original way")
     # forcing_dict = get_forcing_dict(
