@@ -878,6 +878,14 @@ def create_time_series(
     Exceptions:
         None
     """
+    all_variables = []
+    [all_variables.append(v) for v in data_variables]
+
+    # Also add time and reference time variables, if specified
+    if time_variable:
+        all_variables.append(time_variable)
+    if reference_time_variable:
+        all_variables.append(reference_time_variable)
 
     # Cleanup flags
     remove_output = False
@@ -886,7 +894,7 @@ def create_time_series(
         # Validate input files
         input_filepaths = validate_variables(
             input_filepaths,
-            data_variables + [time_variable, reference_time_variable],
+            all_variables,
             skip_missing,
         )
         input_filepaths = validate_common_dimensions(input_filepaths, skip_missing)
@@ -918,14 +926,8 @@ def create_time_series(
                 # Copy global attributes from the archetype
                 copy_attributes(archetype, output_file, removed_global_attributes)
 
-                # Also add time and reference time variables, if specified
-                if time_variable:
-                    data_variables.append(time_variable)
-                if reference_time_variable:
-                    data_variables.append(reference_time_variable)
-
                 # Loop through specified variables
-                for variable in data_variables:
+                for variable in all_variables:
 
                     # Create and fill variable
                     create_time_series_variable(
