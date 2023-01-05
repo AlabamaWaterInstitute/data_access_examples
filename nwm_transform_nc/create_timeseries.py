@@ -518,7 +518,7 @@ def copy_dimensions(input_file, output_file, dimension_names, new_size):
         None
     """
 
-    for (dimension_name, dimension) in input_file.dimensions.iteritems():
+    for (dimension_name, dimension) in input_file.dimensions.items():
         if dimension_name in dimension_names:
             dimension_length = new_size
         elif dimension.isunlimited():
@@ -893,7 +893,7 @@ def create_time_series(
 
         # Open output file
         with Dataset(
-            output_filepath, "w", clobber=True, format="NETCDF4_CLASSIC"
+            output_filepath, "w", clobber=True, format="NETCDF4"
         ) as output_file:
             remove_output = True
             logger.info("Creating %s", output_filepath)
