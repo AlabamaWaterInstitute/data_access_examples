@@ -1,5 +1,5 @@
 from dateutil import rrule
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import product
 
 rundict = {
@@ -173,11 +173,18 @@ def create_file_list(
     except:
         urlbase_prefix = "urlbase_error"
 
-    # TODO: Handle the case of no dates (default to today)
+    try:
+        _dtstart = datetime.strptime(start_date, "%Y%m%d")
+        _until = datetime.strptime(end_date, "%Y%m%d")
+    except:
+        today = datetime.now(timezone.utc)
+        _dtstart = today
+        _until = today
+
     dates = rrule.rrule(
         rrule.DAILY,
-        dtstart=datetime.strptime(start_date, "%Y%m%d"),
-        until=datetime.strptime(end_date, "%Y%m%d"),
+        dtstart=_dtstart,
+        until=_until,
     )
     run_t = run_type(runinput, varinput, geoinput, run_name)
     fhp = fhprefix(runinput)
