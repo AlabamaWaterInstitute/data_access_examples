@@ -1,5 +1,5 @@
 from dateutil import rrule
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import product
 
 rundict = {
@@ -52,8 +52,12 @@ def makename(
     runsuffix="",
     varsuffix="",
     run_typesuffix="",
+    urlbase_prefix="",
 ):
-    return f"nwm.{date.strftime('%Y%m%d')}/{run_type}{run_typesuffix}/nwm.t{fcst_cycle:02d}z.{run_name}{runsuffix}.{var_name}{varsuffix}.{fhprefix}{fcst_hour:03d}.{geography}.nc"
+    datetxt = f"nwm.{date.strftime('%Y%m%d')}"
+    foldertxt = f"{run_type}{run_typesuffix}"
+    filetxt = f"nwm.t{fcst_cycle:02d}z.{run_name}{runsuffix}.{var_name}{varsuffix}.{fhprefix}{fcst_hour:03d}.{geography}.nc"
+    return f"{urlbase_prefix}{datetxt}/{foldertxt}/{filetxt}"
 
 
 # setting run_type
@@ -119,6 +123,25 @@ def select_forecast_cycle(fcst_cycle=None, default=None):
         return default
 
 
+urlbasedict = {
+    0: "",
+    1: "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/prod/",
+    2: "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/post-processed/WMS/",
+    3: "https://storage.googleapis.com/national-water-model/",
+    4: "https://storage.cloud.google.com/national-water-model/",
+    5: "gs://national-water-model/",
+    6: "https://noaa-nwm-retrospective-2-1-pds.s3.amazonaws.com/model_output/",
+    7: "s3://noaa-nwm-retrospective-2-1-pds/model_output/",
+}
+
+
+def selecturlbase(urlbasedict, urlbaseinput, defaulturlbase=""):
+    if urlbaseinput:
+        return urlbasedict[urlbaseinput]
+    else:
+        return defaulturlbase
+
+
 def create_file_list(
     runinput,
     varinput,
@@ -127,6 +150,7 @@ def create_file_list(
     start_date=None,
     end_date=None,
     fcst_cycle=None,
+    urlbaseinput=None,
 ):
     # for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates
 
@@ -144,11 +168,23 @@ def create_file_list(
         var_name = selectvar(vardict, varinput)
     except:
         var_name = "variable_error"
+    try:
+        urlbase_prefix = selecturlbase(urlbasedict, urlbaseinput)
+    except:
+        urlbase_prefix = "urlbase_error"
+
+    try:
+        _dtstart = datetime.strptime(start_date, "%Y%m%d")
+        _until = datetime.strptime(end_date, "%Y%m%d")
+    except:
+        today = datetime.now(timezone.utc)
+        _dtstart = today
+        _until = today
 
     dates = rrule.rrule(
         rrule.DAILY,
-        dtstart=datetime.strptime(start_date, "%Y%m%d"),
-        until=datetime.strptime(end_date, "%Y%m%d"),
+        dtstart=_dtstart,
+        until=_until,
     )
     run_t = run_type(runinput, varinput, geoinput, run_name)
     fhp = fhprefix(runinput)
@@ -303,6 +339,7 @@ def create_file_list(
                 runsuff,
                 vsuff,
                 rtsuff,
+                urlbase_prefix,
             )
         )
     return r
@@ -323,6 +360,9 @@ def main():
     geoinput = 1
 
     meminput = 1
+
+    urlbaseinput = None
+
     print(
         create_file_list(
             runinput,
@@ -332,6 +372,7 @@ def main():
             start_date,
             end_date,
             fcst_cycle,
+            urlbaseinput,
         )
     )
 
