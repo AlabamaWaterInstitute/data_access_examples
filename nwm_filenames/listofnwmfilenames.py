@@ -133,12 +133,13 @@ def select_lead_time(lead_time=None, default=None):
 urlbasedict = {
     0: "",
     1: "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/prod/",
-    2: "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/post-processed/WMS/",
-    3: "https://storage.googleapis.com/national-water-model/",
-    4: "https://storage.cloud.google.com/national-water-model/",
-    5: "gs://national-water-model/",
+    2: "https://storage.googleapis.com/national-water-model/",
+    3: "https://storage.cloud.google.com/national-water-model/",
+    4: "gs://national-water-model/",
+    5: "gcs://national-water-model/",
     6: "https://noaa-nwm-retrospective-2-1-pds.s3.amazonaws.com/model_output/",
     7: "s3://noaa-nwm-retrospective-2-1-pds/model_output/",
+    8: "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/post-processed/WMS/",
 }
 
 
