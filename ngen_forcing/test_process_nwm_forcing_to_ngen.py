@@ -114,15 +114,15 @@ def main():
 
     # This way is extremely slow for anything more than a
     # few files, so we comment it out of the test
-    # start_time = time.time()
-    # print(f"Working on the original way")
-    # forcing_dict = get_forcing_dict(
-    #     gpkg_subset,
-    #     folder_prefix,
-    #     file_list,
-    #     var_list,
-    #     )
-    # print(time.time() - start_time)
+    start_time = time.time()
+    print(f"Working on the old (slow) way")
+    fd1 = get_forcing_dict(
+        gpkg_subset,
+        folder_prefix,
+        file_list,
+        var_list,
+    )
+    print(time.time() - start_time)
 
     start_time = time.time()
     print(f"Working on the new way")
