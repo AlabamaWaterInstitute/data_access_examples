@@ -61,11 +61,16 @@ def get_forcing_dict(
     for _v in var_list:
         df_dict[_v] = pd.DataFrame(index=gpkg_divides.index)
 
+    ds_list = []
     for _nc_file in filelist:
         # _nc_file = ("nwm.t00z.medium_range.forcing.f001.conus.nc")
         _full_nc_file = folder_prefix.joinpath(_nc_file)
+        ds_list.append(xr.open_dataset(_full_nc_file, engine=reng))
 
-        with xr.open_dataset(_full_nc_file, engine=reng) as _xds:
+    for _i, _nc_file in enumerate(filelist):
+        _xds = ds_list[_i]
+        print(f"{_i}, {round(_i/len(filelist), 5)*100}".ljust(40), end="\r")
+        if 1 == 1:
             for _v in var_list:
                 _src = _xds[_v]
                 _aff2 = _src.rio.transform()
@@ -77,6 +82,8 @@ def get_forcing_dict(
                 # if adding statistics back to original GeoDataFrame
                 # gdf3 = pd.concat([gpkg_divides, _df_zonal_stats], axis=1)
                 df_dict[_v][_xds.time.values[0]] = _df_zonal_stats[sum_stat]
+
+    [_xds.close() for _xds in ds_list]
 
     return df_dict
 
