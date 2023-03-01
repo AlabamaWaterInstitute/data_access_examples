@@ -216,7 +216,7 @@ def create_file_list(
     elif runinput == 2:  # if medium_range
         if varinput == 5:  # if forcing
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(0, 13, 6)), range(240)
+                dates, select_forecast_cycle(fcst_cycle, range(0, 19, 6)), range(1, 241)
             )
         else:
             default_fc = range(0, 19, 6)
