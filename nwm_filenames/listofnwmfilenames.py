@@ -123,6 +123,13 @@ def select_forecast_cycle(fcst_cycle=None, default=None):
         return default
 
 
+def select_lead_time(lead_time=None, default=None):
+    if lead_time:
+        return lead_time
+    else:
+        return default
+
+
 urlbasedict = {
     0: "",
     1: "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/prod/",
@@ -151,6 +158,7 @@ def create_file_list(
     end_date=None,
     fcst_cycle=None,
     urlbaseinput=None,
+    lead_time=None,  # TODO: change this order; placed here to avoid breaking change
 ):
     # for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates
 
@@ -197,26 +205,34 @@ def create_file_list(
                 prod = product(
                     dates,
                     select_forecast_cycle(fcst_cycle, range(0, 13, 12)),
-                    range(1, 49),
+                    select_lead_time(lead_time, range(1, 49)),
                 )
             elif geoinput == 3:  # puertorico
                 prod = product(
-                    dates, select_forecast_cycle(fcst_cycle, [6]), range(1, 48)
+                    dates,
+                    select_forecast_cycle(fcst_cycle, [6]),
+                    select_lead_time(lead_time, range(1, 48)),
                 )
             else:
                 prod = product(dates, range(0, 29), range(1, 19))
         elif geoinput == 3:  # if puerto rico
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(6, 19, 12)), range(1, 48)
+                dates,
+                select_forecast_cycle(fcst_cycle, range(6, 19, 12)),
+                select_lead_time(lead_time, range(1, 48)),
             )
         else:
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(24)), range(1, 19)
+                dates,
+                select_forecast_cycle(fcst_cycle, range(24)),
+                select_lead_time(lead_time, range(1, 19)),
             )
     elif runinput == 2:  # if medium_range
         if varinput == 5:  # if forcing
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(0, 19, 6)), range(1, 241)
+                dates,
+                select_forecast_cycle(fcst_cycle, range(0, 19, 6)),
+                select_lead_time(lead_time, range(1, 241)),
             )
         else:
             default_fc = range(0, 19, 6)
@@ -225,13 +241,13 @@ def create_file_list(
                     prod = product(
                         dates,
                         select_forecast_cycle(fcst_cycle, default_fc),
-                        range(1, 241),
+                        select_lead_time(lead_time, range(1, 241)),
                     )
                 elif varinput in {2, 4}:
                     prod = product(
                         dates,
                         select_forecast_cycle(fcst_cycle, default_fc),
-                        range(3, 241, 3),
+                        select_lead_time(lead_time, range(3, 241, 3)),
                     )
                 else:
                     raise ValueError("varinput")
@@ -240,13 +256,13 @@ def create_file_list(
                     prod = product(
                         dates,
                         select_forecast_cycle(fcst_cycle, default_fc),
-                        range(1, 205),
+                        select_lead_time(lead_time, range(1, 205)),
                     )
                 elif varinput in {2, 4}:
                     prod = product(
                         dates,
                         select_forecast_cycle(fcst_cycle, default_fc),
-                        range(3, 205, 3),
+                        select_lead_time(lead_time, range(3, 205, 3)),
                     )
                 else:
                     raise ValueError("varinput")
@@ -257,7 +273,7 @@ def create_file_list(
             prod = product(
                 dates,
                 select_forecast_cycle(fcst_cycle, range(0, 13, 6)),
-                range(3, 240, 3),
+                select_lead_time(lead_time, range(3, 240, 3)),
             )
         else:
             raise ValueError("only valid variable for a _no_da type run is channel_rt")
@@ -265,11 +281,15 @@ def create_file_list(
         default_fc = range(0, 19, 6)
         if varinput in {1, 3}:
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, default_fc), range(6, 721, 6)
+                dates,
+                select_forecast_cycle(fcst_cycle, default_fc),
+                select_lead_time(lead_time, range(6, 721, 6)),
             )
         elif varinput == 2:
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, default_fc), range(24, 721, 24)
+                dates,
+                select_forecast_cycle(fcst_cycle, default_fc),
+                select_lead_time(lead_time, range(24, 721, 24)),
             )
         else:
             raise ValueError("varinput")
@@ -277,31 +297,49 @@ def create_file_list(
         if varinput == 5:  # if forcing
             if geoinput == 2:  # hawaii
                 prod = product(
-                    dates, select_forecast_cycle(fcst_cycle, range(19)), range(3)
+                    dates,
+                    select_forecast_cycle(fcst_cycle, range(19)),
+                    select_lead_time(lead_time, range(3)),
                 )
             else:
                 prod = product(
-                    dates, select_forecast_cycle(fcst_cycle, range(20)), range(3)
+                    dates,
+                    select_forecast_cycle(fcst_cycle, range(20)),
+                    select_lead_time(lead_time, range(3)),
                 )
         else:
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(24)), range(3)
+                dates,
+                select_forecast_cycle(fcst_cycle, range(24)),
+                select_lead_time(lead_time, range(3)),
             )
     elif runinput == 6:  # if analysis_assim_extend
-        prod = product(dates, select_forecast_cycle(fcst_cycle, [16]), range(28))
+        prod = product(
+            dates,
+            select_forecast_cycle(fcst_cycle, [16]),
+            select_lead_time(lead_time, range(28)),
+        )
     elif runinput == 7:  # if analysis_assim_extend_no_da
         if varinput == 1:
-            prod = product(dates, select_forecast_cycle(fcst_cycle, [16]), range(28))
+            prod = product(
+                dates,
+                select_forecast_cycle(fcst_cycle, [16]),
+                select_lead_time(lead_time, range(28)),
+            )
         else:
             raise ValueError("only valid variable for a _no_da type run is channel_rt")
     elif runinput == 8:  # if analysis_assim_long
         prod = product(
-            dates, select_forecast_cycle(fcst_cycle, range(0, 24, 6)), range(12)
+            dates,
+            select_forecast_cycle(fcst_cycle, range(0, 24, 6)),
+            select_lead_time(lead_time, range(12)),
         )
     elif runinput == 9:  # if analysis_assim_long_no_da
         if varinput == 1:
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(0, 24, 6)), range(12)
+                dates,
+                select_forecast_cycle(fcst_cycle, range(0, 24, 6)),
+                select_lead_time(lead_time, range(12)),
             )
         else:
             raise ValueError("only valid variable for a _no_da type run is channel_rt")
@@ -309,7 +347,9 @@ def create_file_list(
     elif runinput == 10:  # if analysis_assim_no_da
         if varinput == 1:
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(21)), range(3)
+                dates,
+                select_forecast_cycle(fcst_cycle, range(21)),
+                select_lead_time(lead_time, range(3)),
             )
         else:
             raise ValueError("only valid variable for a _no_da type run is channel_rt")
@@ -317,7 +357,9 @@ def create_file_list(
     elif runinput == 11 and geoinput == 3:  # if short_range_puertorico_no_da
         if varinput == 1:
             prod = product(
-                dates, select_forecast_cycle(fcst_cycle, range(6, 19, 12)), range(1, 49)
+                dates,
+                select_forecast_cycle(fcst_cycle, range(6, 19, 12)),
+                select_lead_time(lead_time, range(1, 49)),
             )
         else:
             raise ValueError("only valid variable for a _no_da type run is channel_rt")
@@ -350,7 +392,8 @@ def main():
     start_date = "20220822"
     end_date = "20220824"
 
-    fcst_cycle = [12]
+    fcst_cycle = [12, 18]
+    lead_time = [1, 2, 240]
     # fcst_cycle = None  # Retrieves a full day for each day within the range given.
 
     runinput = 2
@@ -373,6 +416,7 @@ def main():
             end_date,
             fcst_cycle,
             urlbaseinput,
+            lead_time,
         )
     )
 
