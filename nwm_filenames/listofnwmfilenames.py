@@ -214,7 +214,11 @@ def create_file_list(
                     select_lead_time(lead_time, range(1, 48)),
                 )
             else:
-                prod = product(dates, range(0, 29), range(1, 19))
+                prod = product(
+                    dates,
+                    select_forecast_cycle(fcst_cycle, range(24)),
+                    select_lead_time(lead_time, range(1, 19)),
+                )
         elif geoinput == 3:  # if puerto rico
             prod = product(
                 dates,
