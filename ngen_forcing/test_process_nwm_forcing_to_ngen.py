@@ -49,7 +49,8 @@ wget -P 03w -c https://nextgen-hydrofabric.s3.amazonaws.com/v1.2/nextgen_03W.gpk
 
 
 def get_forcing_dict(
-    gpkg_divides,
+    feature_index,
+    feature_list,
     folder_prefix,
     filelist,
     var_list,
@@ -59,7 +60,7 @@ def get_forcing_dict(
 
     df_dict = {}
     for _v in var_list:
-        df_dict[_v] = pd.DataFrame(index=gpkg_divides.index)
+        df_dict[_v] = pd.DataFrame(index=feature_index)
 
     ds_list = []
     for _nc_file in filelist:
@@ -77,7 +78,7 @@ def get_forcing_dict(
                 _arr2 = _src.values[0]
 
                 _df_zonal_stats = pd.DataFrame(
-                    zonal_stats(gpkg_divides, _arr2, affine=_aff2)
+                    zonal_stats(feature_list, _arr2, affine=_aff2)
                 )
                 # if adding statistics back to original GeoDataFrame
                 # gdf3 = pd.concat([gpkg_divides, _df_zonal_stats], axis=1)
@@ -121,10 +122,12 @@ def main():
 
     # This way is extremely slow for anything more than a
     # few files, so we comment it out of the test
+
     start_time = time.time()
     print(f"Working on the old (slow) way")
     fd1 = get_forcing_dict(
-        gpkg_subset,
+        gpkg_subset.index,
+        feature_list,
         folder_prefix,
         file_list,
         var_list,
@@ -142,7 +145,7 @@ def main():
 
     start_time = time.time()
     print(f"Working on the new way with threading parallel.")
-    fd3 = get_forcing_dict_newway_parallel(
+    fd3t = get_forcing_dict_newway_parallel(
         feature_list,
         folder_prefix,
         file_list,
@@ -153,7 +156,7 @@ def main():
 
     start_time = time.time()
     print(f"Working on the new way with process parallel.")
-    fd3 = get_forcing_dict_newway_parallel(
+    fd3p = get_forcing_dict_newway_parallel(
         feature_list,
         folder_prefix,
         file_list,
@@ -173,7 +176,7 @@ def main():
 
     start_time = time.time()
     print(f"Working on the new way with loops reversed with threading parallel.")
-    fd4 = get_forcing_dict_newway_inverted_parallel(
+    fd5t = get_forcing_dict_newway_inverted_parallel(
         feature_list,
         folder_prefix,
         file_list,
@@ -184,7 +187,7 @@ def main():
 
     start_time = time.time()
     print(f"Working on the new way with loops reversed with process parallel.")
-    fd4 = get_forcing_dict_newway_inverted_parallel(
+    fd5p = get_forcing_dict_newway_inverted_parallel(
         feature_list,
         folder_prefix,
         file_list,
