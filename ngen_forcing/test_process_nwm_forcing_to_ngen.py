@@ -137,9 +137,11 @@ def main():
     start_time = time.time()
     print(f"Working on the new way")
     fd2 = get_forcing_dict_newway(
+        gpkg_subset.index,
         feature_list,
         folder_prefix,
         file_list,
+        var_list,
     )
     print(time.time() - start_time)
 
@@ -168,9 +170,11 @@ def main():
     start_time = time.time()
     print(f"Working on the new way with loops reversed.")
     fd4 = get_forcing_dict_newway_inverted(
+        gpkg_subset.index,
         feature_list,
         folder_prefix,
         file_list,
+        var_list,
     )
     print(time.time() - start_time)
 

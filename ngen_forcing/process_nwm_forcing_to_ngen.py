@@ -2,6 +2,7 @@ from defs import xr_read_window, polymask
 from rasterio import _io, windows
 import concurrent.futures
 import xarray as xr
+import pandas as pd
 
 
 class MemoryDataset(_io.MemoryDataset, windows.WindowMethodsMixin):
@@ -15,36 +16,49 @@ def junk():
 
 
 def get_forcing_dict_newway(
+    feature_index,
     feature_list,
     folder_prefix,
     file_list,
+    var_list,
 ):
 
     reng = "rasterio"
-    _xds = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
-    _template_arr = _xds.U2D.values
+
+    _xds_dummy = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
+    _template_arr = _xds_dummy.U2D.values
     _u2d = MemoryDataset(
         _template_arr,
-        transform=_xds.U2D.rio.transform(),
+        transform=_xds_dummy.U2D.rio.transform(),
         gcps=None,
         rpcs=None,
         crs=None,
         copy=False,
     )
 
-    filehandles = [xr.open_dataset("data/" + f) for f in file_list]
-    stats = []
-    for i, m in enumerate(map(polymask(_u2d), feature_list)):
+    ds_list = []
+    for _nc_file in file_list:
+        _full_nc_file = folder_prefix.joinpath(_nc_file)
+        ds_list.append(xr.open_dataset(_full_nc_file, engine=reng))
+
+    df_dict = {}
+    for _v in var_list:
+        df_dict[_v] = pd.DataFrame(index=feature_index)
+
+    for i, feature in enumerate(feature_list):
         print(f"{i}, {round(i/len(feature_list), 5)*100}".ljust(40), end="\r")
-        mask, _, window = m
+        mask, _, window = polymask(_u2d)(feature)
         mask = xr.DataArray(mask, dims=["y", "x"])
         winslices = dict(zip(["y", "x"], window.toslices()))
-        for f in filehandles:
-            cropped = xr_read_window(f, winslices, mask=mask)
-            stats.append(cropped.mean())
-    [f.close() for f in filehandles]  # Returns None for each file
+        for j, _xds in enumerate(ds_list):
+            time_value = _xds.time.values[0]
+            cropped = xr_read_window(_xds, winslices, mask=mask)
+            stats = cropped.mean()
+            for var in var_list:
+                df_dict[var].loc[i, time_value] = stats[var]
 
-    return stats
+    [ds.close() for ds in ds_list]
+    return df_dict
 
 
 def get_forcing_dict_newway_parallel(
@@ -98,43 +112,58 @@ def get_forcing_dict_newway_parallel(
 
 
 def get_forcing_dict_newway_inverted(
+    feature_index,
     feature_list,
     folder_prefix,
     file_list,
+    var_list,
 ):
 
     reng = "rasterio"
-    _xds = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
-    _template_arr = _xds.U2D.values
+
+    _xds_dummy = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
+    _template_arr = _xds_dummy.U2D.values
     _u2d = MemoryDataset(
         _template_arr,
-        transform=_xds.U2D.rio.transform(),
+        transform=_xds_dummy.U2D.rio.transform(),
         gcps=None,
         rpcs=None,
         crs=None,
         copy=False,
     )
+    ds_list = []
+    for _nc_file in file_list:
+        _full_nc_file = folder_prefix.joinpath(_nc_file)
+        ds_list.append(xr.open_dataset(_full_nc_file, engine=reng))
 
-    filehandles = [xr.open_dataset("data/" + f) for f in file_list]
     stats = []
-    future_list = []
     mask_win_list = []
 
-    for i, m in enumerate(map(polymask(_u2d), feature_list)):
+    for i, feature in enumerate(feature_list):
         print(f"{i}, {round(i/len(feature_list), 5)*100}".ljust(40), end="\r")
-        mask, _, window = m
+        mask, _, window = polymask(_u2d)(feature)
         mask = xr.DataArray(mask, dims=["y", "x"])
         winslices = dict(zip(["y", "x"], window.toslices()))
         mask_win_list.append((mask, winslices))
 
-    for f in filehandles:
+    for i, f in enumerate(ds_list):
         print(f"{i}, {round(i/len(file_list), 2)*100}".ljust(40), end="\r")
-        for _m, _w in mask_win_list:
+        time_value = f.time.values[0]
+        # TODO: when we read the window, could the time be added as a dimension?
+        for j, (_m, _w) in enumerate(mask_win_list):
             cropped = xr_read_window(f, _w, mask=_m)
-            stats.append(cropped.mean())
+            stats.append((j, time_value, cropped.mean()))
 
-    [f.close() for f in filehandles]
-    return stats
+    df_dict = {}
+    for _v in var_list:
+        df_dict[_v] = pd.DataFrame(index=feature_index)
+
+    for j, t, s in stats:
+        for var in var_list:
+            df_dict[var].loc[j, t] = s[var]
+
+    [ds.close() for ds in ds_list]
+    return df_dict
 
 
 def get_forcing_dict_newway_inverted_parallel(

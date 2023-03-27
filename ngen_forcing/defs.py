@@ -16,3 +16,11 @@ def xr_read_window(ds, window, mask=None):
         return data
     else:
         return data.where(mask)
+
+
+def xr_read_window_time(ds, window, mask=None, idx=None, time=None):
+    data = ds.isel(window)
+    if mask is None:
+        return idx, time, data
+    else:
+        return idx, time, data.where(mask)
