@@ -148,9 +148,11 @@ def main():
     start_time = time.time()
     print(f"Working on the new way with threading parallel.")
     fd3t = get_forcing_dict_newway_parallel(
+        gpkg_subset.index,
         feature_list,
         folder_prefix,
         file_list,
+        var_list,
         para="thread",
         para_n=16,
     )
@@ -159,9 +161,11 @@ def main():
     start_time = time.time()
     print(f"Working on the new way with process parallel.")
     fd3p = get_forcing_dict_newway_parallel(
+        gpkg_subset.index,
         feature_list,
         folder_prefix,
         file_list,
+        var_list,
         para="process",
         para_n=16,
     )
@@ -181,9 +185,11 @@ def main():
     start_time = time.time()
     print(f"Working on the new way with loops reversed with threading parallel.")
     fd5t = get_forcing_dict_newway_inverted_parallel(
+        gpkg_subset.index,
         feature_list,
         folder_prefix,
         file_list,
+        var_list,
         para="thread",
         para_n=16,
     )
@@ -192,9 +198,11 @@ def main():
     start_time = time.time()
     print(f"Working on the new way with loops reversed with process parallel.")
     fd5p = get_forcing_dict_newway_inverted_parallel(
+        gpkg_subset.index,
         feature_list,
         folder_prefix,
         file_list,
+        var_list,
         para="process",
         para_n=16,
     )

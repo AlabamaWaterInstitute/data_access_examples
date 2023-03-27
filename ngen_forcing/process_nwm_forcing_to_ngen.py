@@ -1,6 +1,5 @@
-from defs import xr_read_window, polymask
+from defs import xr_read_window, polymask, xr_read_window_time
 from rasterio import _io, windows
-import concurrent.futures
 import xarray as xr
 import pandas as pd
 
@@ -62,17 +61,20 @@ def get_forcing_dict_newway(
 
 
 def get_forcing_dict_newway_parallel(
+    feature_index,
     feature_list,
     folder_prefix,
     file_list,
+    var_list,
     para="thread",
     para_n=2,
 ):
 
+    import concurrent.futures
+
     reng = "rasterio"
     _xds = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
     _template_arr = _xds.U2D.values
-
     _u2d = MemoryDataset(
         _template_arr,
         transform=_xds.U2D.rio.transform(),
@@ -81,7 +83,10 @@ def get_forcing_dict_newway_parallel(
         crs=None,
         copy=False,
     )
-    filehandles = [xr.open_dataset("data/" + f) for f in file_list]
+    ds_list = [xr.open_dataset(folder_prefix.joinpath(f)) for f in file_list]
+    # ds_list = [xr.open_dataset(folder_prefix.joinpath(f), engine=reng) for f in file_list]
+    # TODO: figure out why using the rasterio engine DOES NOT WORK with parallel
+    # TODO: figure out why NOT using the rasterio engine produces a different result
 
     if para == "process":
         pool = concurrent.futures.ProcessPoolExecutor
@@ -90,25 +95,38 @@ def get_forcing_dict_newway_parallel(
     else:
         pool = concurrent.futures.ThreadPoolExecutor
 
-    with pool(max_workers=para_n) as executor:
-        stats = []
-        future_list = []
+    stats = []
+    future_list = []
 
-        for i, m in enumerate(map(polymask(_u2d), feature_list)):
-            print(f"{i}, {round(i/len(feature_list), 5)*100}".ljust(40), end="\r")
-            mask, _, window = m
+    with pool(max_workers=para_n) as executor:
+
+        for _i, _m in enumerate(map(polymask(_u2d), feature_list)):
+            print(f"{_i}, {round(_i/len(feature_list), 5)*100}".ljust(40), end="\r")
+            mask, _, window = _m
             mask = xr.DataArray(mask, dims=["y", "x"])
             winslices = dict(zip(["y", "x"], window.toslices()))
-            for f in filehandles:
-                future = executor.submit(xr_read_window, f, winslices, mask=mask)
+            for ds in ds_list:
+                _t = ds.time.values[0]
+                future = executor.submit(
+                    xr_read_window_time, ds, winslices, mask=mask, idx=_i, time=_t
+                )
                 # cropped = xr_read_window(f, winslices, mask=mask)
                 # stats.append(cropped.mean())
                 future_list.append(future)
         for _f in concurrent.futures.as_completed(future_list):
-            stats.append(_f.result().mean())
+            _j, _t, _s = _f.result()
+            stats.append((_j, _t, _s))
 
-    [f.close() for f in filehandles]
-    return stats
+    df_dict = {}
+    for _v in var_list:
+        df_dict[_v] = pd.DataFrame(index=feature_index)
+
+    for j, t, s in stats:
+        for var in var_list:
+            df_dict[var].loc[j, t] = s[var].mean()
+
+    [ds.close() for ds in ds_list]
+    return df_dict
 
 
 def get_forcing_dict_newway_inverted(
@@ -167,9 +185,11 @@ def get_forcing_dict_newway_inverted(
 
 
 def get_forcing_dict_newway_inverted_parallel(
+    feature_index,
     feature_list,
     folder_prefix,
     file_list,
+    var_list,
     para="thread",
     para_n=2,
 ):
@@ -196,7 +216,11 @@ def get_forcing_dict_newway_inverted_parallel(
         winslices = dict(zip(["y", "x"], window.toslices()))
         mask_win_list.append((mask, winslices))
 
-    filehandles = [xr.open_dataset("data/" + f) for f in file_list]
+    ds_list = [xr.open_dataset(folder_prefix.joinpath(f)) for f in file_list]
+    # ds_list = [xr.open_dataset(folder_prefix.joinpath(f), engine=reng) for f in file_list]
+    # TODO: figure out why using the rasterio engine DOES NOT WORK with parallel
+    # TODO: figure out why NOT using the rasterio engine produces a different result
+
     stats = []
     future_list = []
 
@@ -209,15 +233,27 @@ def get_forcing_dict_newway_inverted_parallel(
 
     with pool(max_workers=para_n) as executor:
 
-        for f in filehandles:
-            print(f"{i}, {round(i/len(file_list), 2)*100}".ljust(40), end="\r")
-            for _m, _w in mask_win_list:
-                future = executor.submit(xr_read_window, f, _w, mask=_m)
-                # cropped = xr_read_window(f, _w, mask=_m)
+        for j, ds in enumerate(ds_list):
+            print(f"{j}, {round(i/len(file_list), 2)*100}".ljust(40), end="\r")
+            _t = ds.time.values[0]
+            for _i, (_m, _w) in enumerate(mask_win_list):
+                future = executor.submit(
+                    xr_read_window_time, ds, _w, mask=_m, idx=_i, time=_t
+                )
+                # cropped = xr_read_window(ds, _w, mask=_m)
                 # stats.append(cropped.mean())
                 future_list.append(future)
         for _f in concurrent.futures.as_completed(future_list):
-            stats.append(_f.result().mean())
+            _j, _t, _s = _f.result()
+            stats.append((_j, _t, _s))
 
-    [f.close() for f in filehandles]
-    return stats
+    df_dict = {}
+    for _v in var_list:
+        df_dict[_v] = pd.DataFrame(index=feature_index)
+
+    for j, t, s in stats:
+        for var in var_list:
+            df_dict[var].loc[j, t] = s[var].mean()
+
+    [ds.close() for ds in ds_list]
+    return df_dict
