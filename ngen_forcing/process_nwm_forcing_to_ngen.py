@@ -8,12 +8,6 @@ class MemoryDataset(_io.MemoryDataset, windows.WindowMethodsMixin):
     pass
 
 
-def junk():
-
-    flist = gpkg_divides.geometry.to_list()
-    polys = flist
-
-
 def get_forcing_dict_newway(
     feature_index,
     feature_list,
@@ -21,7 +15,6 @@ def get_forcing_dict_newway(
     file_list,
     var_list,
 ):
-
     reng = "rasterio"
 
     _xds_dummy = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
@@ -136,7 +129,6 @@ def get_forcing_dict_newway_inverted(
     file_list,
     var_list,
 ):
-
     reng = "rasterio"
 
     _xds_dummy = xr.open_dataset(folder_prefix.joinpath(file_list[0]), engine=reng)
@@ -193,7 +185,6 @@ def get_forcing_dict_newway_inverted_parallel(
     para="thread",
     para_n=2,
 ):
-
     import concurrent.futures
 
     reng = "rasterio"
@@ -208,10 +199,15 @@ def get_forcing_dict_newway_inverted_parallel(
         copy=False,
     )
 
+    ds_list = [xr.open_dataset("data/" + f) for f in file_list]
+
+    stats = []
+    future_list = []
     mask_win_list = []
-    for i, m in enumerate(map(polymask(_u2d), feature_list)):
+
+    for i, feature in enumerate(feature_list):
         print(f"{i}, {round(i/len(feature_list), 5)*100}".ljust(40), end="\r")
-        mask, _, window = m
+        mask, _, window = polymask(_u2d)(feature)
         mask = xr.DataArray(mask, dims=["y", "x"])
         winslices = dict(zip(["y", "x"], window.toslices()))
         mask_win_list.append((mask, winslices))
@@ -232,6 +228,9 @@ def get_forcing_dict_newway_inverted_parallel(
         pool = concurrent.futures.ThreadPoolExecutor
 
     with pool(max_workers=para_n) as executor:
+        df_dict = {}
+        for _v in var_list:
+            df_dict[_v] = pd.DataFrame(index=feature_index)
 
         for j, ds in enumerate(ds_list):
             print(f"{j}, {round(i/len(file_list), 2)*100}".ljust(40), end="\r")

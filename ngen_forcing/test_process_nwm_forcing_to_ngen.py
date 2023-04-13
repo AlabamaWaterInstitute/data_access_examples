@@ -94,7 +94,6 @@ def get_forcing_dict(
 
 
 def main():
-
     folder_prefix = Path("data")
     list_of_files = [
         f"nwm.t12z.medium_range.forcing.f{_r:03}.conus.nc" for _r in range(1, 241)
@@ -146,6 +145,7 @@ def main():
     print(time.time() - start_time)
 
     start_time = time.time()
+
     print(f"Working on the new way with threading parallel.")
     fd3t = get_forcing_dict_newway_parallel(
         gpkg_subset.index,
@@ -170,7 +170,6 @@ def main():
         para_n=16,
     )
     print(time.time() - start_time)
-
     start_time = time.time()
     print(f"Working on the new way with loops reversed.")
     fd4 = get_forcing_dict_newway_inverted(
@@ -194,7 +193,6 @@ def main():
         para_n=16,
     )
     print(time.time() - start_time)
-
     start_time = time.time()
     print(f"Working on the new way with loops reversed with process parallel.")
     fd5p = get_forcing_dict_newway_inverted_parallel(
