@@ -1,12 +1,12 @@
 import geopandas as gpd
-import argparse
+import argparse, os
 from subset import get_upstream_ids    
 
 def main():
     #setup the argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i",  dest="infile", type=str, required=True, help="A gpkg file containing divides and nexus layers")
-    parser.add_argument("-o",  dest="outfile", type=str, required=True, help="A text file containing the number of upstream catchments for each catchment")
+    parser.add_argument(dest="infile", type=str, help="A gpkg file containing divides and nexus layers")
+    parser.add_argument(dest="outfile", type=str, help="A text file containing the number of upstream catchments for each catchment")
     args = parser.parse_args()
 
     infile    = args.infile
@@ -27,6 +27,7 @@ def main():
     upstream = nupstream(df_cat_org, df_nex_org,df_cat.index)
 
     with open(outfile,'w') as fp:
+        fp.write(f'Catchment IDs and the number of upstream catchments\nGenerated with file {os.path.basename(infile)}\n')
         for jcatch in upstream:
             fp.write(f'{jcatch} : {upstream[jcatch]}\n')
 
