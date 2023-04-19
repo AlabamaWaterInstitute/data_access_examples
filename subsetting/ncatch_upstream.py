@@ -18,13 +18,10 @@ def main():
     print("Reading nexus data...")
     df_nex = gpd.read_file(str(infile), layer="nexus")
 
-    df_cat_org = df_cat.copy()
-    df_nex_org = df_nex.copy()
-
     df_cat.set_index('id', inplace=True)
 
     print("Finding upstream catchments...")
-    upstream = nupstream(df_cat_org, df_nex_org,df_cat.index)
+    upstream = nupstream(df_cat.reset_index(), df_nex.reset_index(),df_cat.index)
 
     with open(outfile,'w') as fp:
         fp.write(f'Catchment IDs and the number of upstream catchments\nGenerated with file {os.path.basename(infile)}\n')
