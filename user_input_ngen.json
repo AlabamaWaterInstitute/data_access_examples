@@ -1,0 +1,15 @@
+{
+    "forcing"  : {
+        "start_date" : "20220822",
+        "end_date"   : "20220822",
+        "runinput" : 2,
+        "varinput" : 5,
+        "geoinput" : 1,
+        "meminput" : 0,
+        "urlbaseinput" : null
+    },
+
+    "hydrofab" : {
+        "vpu"        : 14
+    }
+}
