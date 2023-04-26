@@ -68,6 +68,28 @@ HUC10_MEDIUM_RANGE_WEIGHTS_FILEPATH = os.path.join(
 ROUTE_LINK_FILE = os.path.join(NWM_CACHE_DIR, "RouteLink_CONUS.nc")
 ROUTE_LINK_PARQUET = os.path.join(NWM_CACHE_DIR, "route_link_conus.parquet")
 
+# TODO: Implemenent these function to appropriately calculate precip_rate
+def rho(temp): 
+    """
+        Calculate water density at temperature
+    """
+    return 999.99399 + 0.04216485*temp - 0.007097451*(temp**2) + 0.00003509571*(temp**3) - 9.9037785E-8*(temp**4) 
+
+def aorc_as_rate(dataFrame):
+    """
+        Convert kg/m^2 -> m/s
+    """
+    if isinstance(dataFrame.index, pd.MultiIndex):
+        interval = pd.Series(dataFrame.index.get_level_values(0))
+    else:
+        interval = pd.Series(dataFrame.index)
+    interval = ( interval.shift(-1) - interval ) / np.timedelta64(1, 's')
+    interval.index = dataFrame.index
+    precip_rate = ( dataFrame['APCP_surface'].shift(-1) / dataFrame['TMP_2maboveground'].apply(rho) ) / interval
+    precip_rate.name = 'precip_rate'
+    return precip_rate
+
+######
 
 def parquet_to_gdf(parquet_filepath: str) -> gpd.GeoDataFrame:
     gdf = gpd.read_parquet(parquet_filepath)
@@ -291,7 +313,7 @@ def get_forcing_dict_JL(
     df_by_t = []    
     for _i, _nc_file in enumerate(filelist):
         _full_nc_file = folder_prefix.joinpath(_nc_file)
-        print(f"Indexing data out of {_full_nc_file} {_i}, {round(_i/len(filelist), 5)*100}".ljust(40), end="\r")
+        print(f"Data indexing progress -> {_i}, {round(_i/len(filelist), 5)*100}".ljust(40), end="\r")
         with xr.open_dataset(_full_nc_file) as _xds:
             shp   = _xds['U2D'].shape
             data_allvars = np.zeros(
@@ -302,7 +324,7 @@ def get_forcing_dict_JL(
             _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, pickle_file)
             df_by_t.append(_df_zonal_stats)
 
-    print(f'Reformating and converting data into dataframe')
+    print(f'Reformating and converting data into dataframe', end="\r")
     dfs = {}
     for jcat in list(df_by_t[0].keys()):
         data_catch = []
@@ -455,6 +477,7 @@ def main():
         "V2D",
         "LWDOWN",
         "RAINRATE",
+        "RAINRATE",
         "T2D",
         "PSFC",
         "SWDOWN",
@@ -465,6 +488,7 @@ def main():
         "VGRD_10maboveground",
         "DLWRF_surface",
         "APCP_surface",
+        "precip_rate",    # BROKEN
         "TMP_2maboveground",
         "SPFH_2maboveground",
         "DSWRF_surface",
@@ -483,7 +507,6 @@ def main():
         var_list,
         var_list_out,
     )
-    ncatch_out = len(fd2.keys())
 
     t0 = time.perf_counter()
     for jcatch in fd2.keys(): 
@@ -494,57 +517,57 @@ def main():
 
     print(f'JL write took {time.perf_counter() - t0:.2f} s')
 
-    fd2 = get_forcing_dict_RTIway2(
-        pkl_file,
-        polygonfile,
-        Path(data_dir),
-        just_files,
-        var_list,
-    )    
+    # fd2 = get_forcing_dict_RTIway2(
+    #     pkl_file,
+    #     polygonfile,
+    #     Path(data_dir),
+    #     just_files,
+    #     var_list,
+    # )    
 
-    t0 = time.perf_counter()
-    # pcp_var and pcp_var2 are indentical?
-    pcp_var = fd2["RAINRATE"]
-    lw_var = fd2["LWDOWN"]
-    sw_var = fd2["SWDOWN"]
-    sp_var = fd2["PSFC"]
-    tmp_var = fd2["T2D"]
-    u2d_var = fd2["U2D"]
-    v2d_var = fd2["V2D"]
-    pcp_var2 = fd2["RAINRATE"]
+    # t0 = time.perf_counter()
+    # # pcp_var and pcp_var2 are indentical?
+    # pcp_var = fd2["RAINRATE"]
+    # lw_var = fd2["LWDOWN"]
+    # sw_var = fd2["SWDOWN"]
+    # sp_var = fd2["PSFC"]
+    # tmp_var = fd2["T2D"]
+    # u2d_var = fd2["U2D"]
+    # v2d_var = fd2["V2D"]
+    # pcp_var2 = fd2["RAINRATE"]
 
-    for _i in range(0, ncatch_out):
+    # for _i in range(0, ncatch_out):
 
-        pcp_var_0 = pcp_var.transpose()[_i].rename("APCP_surface")
-        lw_var_0 = lw_var.transpose()[_i].rename("DLWRF_surface")
-        sw_var_0 = sw_var.transpose()[_i].rename("DSWRF_surface")
-        sp_var_0 = sp_var.transpose()[_i].rename("SPFH_2maboveground")
-        tmp_var_0 = tmp_var.transpose()[_i].rename("TMP_2maboveground")
-        u2d_var_0 = u2d_var.transpose()[_i].rename("UGRD_10maboveground")
-        v2d_var_0 = v2d_var.transpose()[_i].rename("VGRD_10maboveground")
-        pcp_var2_0 = pcp_var2.transpose()[_i].rename("precip_rate")  ##BROKEN!!
+    #     pcp_var_0 = pcp_var.transpose()[_i].rename("APCP_surface")
+    #     lw_var_0 = lw_var.transpose()[_i].rename("DLWRF_surface")
+    #     sw_var_0 = sw_var.transpose()[_i].rename("DSWRF_surface")
+    #     sp_var_0 = sp_var.transpose()[_i].rename("SPFH_2maboveground")
+    #     tmp_var_0 = tmp_var.transpose()[_i].rename("TMP_2maboveground")
+    #     u2d_var_0 = u2d_var.transpose()[_i].rename("UGRD_10maboveground")
+    #     v2d_var_0 = v2d_var.transpose()[_i].rename("VGRD_10maboveground")
+    #     pcp_var2_0 = pcp_var2.transpose()[_i].rename("precip_rate")  ##BROKEN!!
 
-        d = pd.concat(
-            [
-                pcp_var_0,
-                lw_var_0,
-                sw_var_0,
-                sp_var_0,
-                tmp_var_0,
-                u2d_var_0,
-                v2d_var_0,
-                pcp_var2_0,
-            ],
-            axis=1,
-        )
-        d.index.name = "time"
+    #     d = pd.concat(
+    #         [
+    #             pcp_var_0,
+    #             lw_var_0,
+    #             sw_var_0,
+    #             sp_var_0,
+    #             tmp_var_0,
+    #             u2d_var_0,
+    #             v2d_var_0,
+    #             pcp_var2_0,
+    #         ],
+    #         axis=1,
+    #     )
+    #     d.index.name = "time"
 
-        id = polygonfile["id"][_i]
-        splt = id.split('-')
-        csvname = f"{output_dir}/cat{vpu}_{splt[1]}.csv"
-        d.to_csv(csvname)
+    #     id = polygonfile["id"][_i]
+    #     splt = id.split('-')
+    #     csvname = f"{output_dir}/cat{vpu}_{splt[1]}.csv"
+    #     d.to_csv(csvname)
 
-    print(f'RTI write took {time.perf_counter() - t0:.2f} s')
+    # print(f'RTI write took {time.perf_counter() - t0:.2f} s')
 
     print(f'\n\nDone! Catchment forcing files have been generated for VPU {vpu} in {output_dir}\n\n')
 
