@@ -1,13 +1,12 @@
-
 # https://github.com/jameshalgren/data-access-examples/blob/DONOTMERGE_VPU16/ngen_forcing/VERYROUGH_RTI_Forcing_example.ipynb
 
 # !pip install --upgrade google-api-python-client
 # !pip install --upgrade google-cloud-storage
 
 import pickle
-import time
 import pandas as pd
 import argparse, os, json
+from sys import getsizeof
 import gc
 from pathlib import Path
 import geopandas as gpd
@@ -17,8 +16,11 @@ import xarray as xr
 from google.cloud import storage
 from rasterio.io import MemoryFile
 from rasterio.features import rasterize
+import rasterio
+import time
 
 from nwm_filenames.listofnwmfilenames import create_file_list
+from ngen_forcing.process_nwm_forcing_to_ngen import *
 
 TEMPLATE_BLOB_NAME = (
     "nwm.20221001/forcing_medium_range/nwm.t00z.medium_range.forcing.f001.conus.nc"
@@ -141,7 +143,6 @@ def generate_weights_file(
     gdf_proj = gdf.to_crs(CONUS_NWM_WKT)
 
     crosswalk_dict = {}
-
     # This is a probably a really poor performing way to do this
     # TODO: Consider vectorizing -- would require digging into the
     # other end of these where we unpack the weights...  
@@ -163,7 +164,6 @@ def generate_weights_file(
         if i % 100 == 0:
             perc = i/len(gdf_proj)*100
             print(f"{i}, {perc:.2f}%".ljust(40), end="\r")
-            if perc > 0.01: break
         i += 1
 
     with open(weights_filepath, "wb") as f:
@@ -176,7 +176,7 @@ def add_zonalstats_to_gdf_weights(
     weights_filepath: str,
 ) -> gpd.GeoDataFrame:
     """Calculates zonal stats and adds to GeoDataFrame"""
-
+    
     df = calc_zonal_stats_weights(src, weights_filepath)
     gdf_map = gdf.merge(df, left_on="huc10", right_on="catchment_id")
 
@@ -200,10 +200,37 @@ def get_blob(blob_name: str, bucket: str = NWM_BUCKET) -> bytes:
     bucket = client.bucket(bucket)
     return bucket.blob(blob_name).download_as_bytes(timeout=120)
 
+def calc_zonal_stats_weights_new(
+    src: np.ndarray,
+    weights_filepath: str,   
+) -> pd.DataFrame:
+    """Calculates zonal stats"""
+
+    # Open weights dict from pickle
+    # This could probably be done once and passed as a reference.
+    with open(weights_filepath, "rb") as f:
+        crosswalk_dict = pickle.load(f)
+
+    nvar = src.shape[0]
+    mean_dict = {}
+    for key, value in crosswalk_dict.items():
+        mean_dict[key] = np.zeros((nvar,),dtype=np.float64)  
+    
+    mean_dict = {}
+    for key, value in crosswalk_dict.items():
+        mean_dict[key] = np.nanmean(src[:,value[0],value[1]],axis=1)
+
+    # This should not be needed, but without memory usage grows
+    del crosswalk_dict
+    del f
+    gc.collect()
+
+    return mean_dict
+
 
 def calc_zonal_stats_weights(
     src: xr.DataArray,
-    weights_filepath: str,
+    weights_filepath: str,    
 ) -> pd.DataFrame:
     """Calculates zonal stats"""
 
@@ -230,7 +257,6 @@ def calc_zonal_stats_weights(
 
     return df
 
-
 def get_forcing_dict_RTIway(
     pickle_file,  # This would be a Feature list for parallel calling --
     # if there is a stored weights file, we use it
@@ -254,6 +280,39 @@ def get_forcing_dict_RTIway(
     [f.close() for f in filehandles]
     return stats
 
+def get_forcing_dict_JL(
+    pickle_file,
+    folder_prefix,
+    filelist,
+    var_list,
+    var_list_out
+):
+    t1 = time.perf_counter()
+    df_by_t = []    
+    for _i, _nc_file in enumerate(filelist):
+        _full_nc_file = folder_prefix.joinpath(_nc_file)
+        print(f"Indexing data out of {_full_nc_file} {_i}, {round(_i/len(filelist), 5)*100}".ljust(40), end="\r")
+        with xr.open_dataset(_full_nc_file) as _xds:
+            shp   = _xds['U2D'].shape
+            data_allvars = np.zeros(
+                shape=(len(var_list),shp[1],shp[2]),
+                dtype=_xds['U2D'].dtype)
+            for var_dx, jvar in enumerate(var_list):
+                data_allvars[var_dx,:,:] = np.squeeze(_xds[jvar].values)
+            _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, pickle_file)
+            df_by_t.append(_df_zonal_stats)
+
+    print(f'Reformating and converting data into dataframe')
+    dfs = {}
+    for jcat in list(df_by_t[0].keys()):
+        data_catch = []
+        for jt in range(len(df_by_t)):     
+            data_catch.append(df_by_t[jt][jcat])
+        dfs[jcat] = pd.DataFrame(data_catch,columns = var_list_out)
+
+    print(f"Indexing data and generating the dataframes (JL) {time.perf_counter() - t1:.2f} s")
+
+    return dfs
 
 def get_forcing_dict_RTIway2(
     pickle_file,  # This would be a Feature list for parallel calling --
@@ -264,6 +323,7 @@ def get_forcing_dict_RTIway2(
     filelist,
     var_list,
 ):
+    t1=time.perf_counter()
     reng = "rasterio"
     pick_val = "value"
 
@@ -304,6 +364,7 @@ def get_forcing_dict_RTIway2(
         df_dict[_v] = pd.concat(dl_dict[_v], axis=1)
 
     # [_xds.close() for _xds in ds_list]
+    print(f"Indexing data and generating the dataframes (RTI) {time.perf_counter() - t1:.2f} s")
 
     return df_dict
 
@@ -336,25 +397,20 @@ def main():
     vpu        = conf['hydrofab']['vpu']
     # Subsetting ???
 
+    # Set paths and make directories if needed
     top_dir    = os.path.dirname(args.infile)
     data_dir   = os.path.join(top_dir,'raw_forcing_data')
     output_dir = os.path.join(top_dir,'catchment_forcing_data')
-
     if not os.path.exists(data_dir):
         os.system(f'mkdir {data_dir}')   
-
     if not os.path.exists(output_dir):
         os.system(f'mkdir {output_dir}')  
 
     # Generate list of file names to retrieve for forcing data
+    print(f'Creating list of file names to pull...')
     n = 6
     fcst_cycle = [n*x for x in range(24//n)]
     lead_time  = [x+1 for x in range(n)]
-
-    # TODO: These need to be in the configuration file
-
-
-    print(f'Creating list of file names to pull...')
     nwm_forcing_files = create_file_list(
             runinput,
             varinput,
@@ -367,7 +423,7 @@ def main():
             lead_time,
         )
     
-    print(f'Pulling files...')
+    # Check to see if we have files cached, if not wget them
     local_files = []
     for jfile in nwm_forcing_files:
         file_parts = jfile.split('/')
@@ -389,18 +445,29 @@ def main():
     parq_file   = os.path.join(data_dir,"ng_03.parquet")
     polygonfile.to_parquet(parq_file)
     pkl_file = os.path.join(data_dir,"weights.pkl")
-    generate_weights_file(polygonfile, src, pkl_file, crosswalk_dict_key="id")
-    calc_zonal_stats_weights(src, pkl_file)
 
+    print("Generating weights")
+    t1 = time.perf_counter()
+    # generate_weights_file(polygonfile, src, pkl_file, crosswalk_dict_key="id")
+    print(f"Generating the weights took {time.perf_counter() - t1:.2f} s")
     var_list = [
         "U2D",
         "V2D",
         "LWDOWN",
         "RAINRATE",
         "T2D",
-        "Q2D",
         "PSFC",
         "SWDOWN",
+    ]
+
+    var_list_out = [
+        "UGRD_10maboveground",
+        "VGRD_10maboveground",
+        "DLWRF_surface",
+        "APCP_surface",
+        "TMP_2maboveground",
+        "SPFH_2maboveground",
+        "DSWRF_surface",
     ]
 
     just_files = []
@@ -408,14 +475,34 @@ def main():
         splt = jfile.split('/') # Need a way to do this that doesn't break on windows
         just_files.append(splt[-1])
 
+    
+    fd2 = get_forcing_dict_JL(
+        pkl_file,
+        Path(data_dir),
+        just_files,
+        var_list,
+        var_list_out,
+    )
+    ncatch_out = len(fd2.keys())
+
+    t0 = time.perf_counter()
+    for jcatch in fd2.keys(): 
+        arr = fd2[jcatch]  
+        splt = jcatch.split('-')
+        csvname = f"{output_dir}/cat{vpu}_{splt[1]}.csv"
+        arr.to_csv(csvname)
+
+    print(f'JL write took {time.perf_counter() - t0:.2f} s')
+
     fd2 = get_forcing_dict_RTIway2(
         pkl_file,
         polygonfile,
         Path(data_dir),
         just_files,
         var_list,
-    )
+    )    
 
+    t0 = time.perf_counter()
     # pcp_var and pcp_var2 are indentical?
     pcp_var = fd2["RAINRATE"]
     lw_var = fd2["LWDOWN"]
@@ -426,8 +513,7 @@ def main():
     v2d_var = fd2["V2D"]
     pcp_var2 = fd2["RAINRATE"]
 
-    ncatchments = len(polygonfile["id"])
-    for _i in range(0, ncatchments):
+    for _i in range(0, ncatch_out):
 
         pcp_var_0 = pcp_var.transpose()[_i].rename("APCP_surface")
         lw_var_0 = lw_var.transpose()[_i].rename("DLWRF_surface")
@@ -457,6 +543,8 @@ def main():
         splt = id.split('-')
         csvname = f"{output_dir}/cat{vpu}_{splt[1]}.csv"
         d.to_csv(csvname)
+
+    print(f'RTI write took {time.perf_counter() - t0:.2f} s')
 
     print(f'\n\nDone! Catchment forcing files have been generated for VPU {vpu} in {output_dir}\n\n')
 
