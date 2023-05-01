@@ -36,4 +36,11 @@ contents:
 ### hydrofab
 | Field Name | Data Type | Description |
 | --- | --- | --- |
-| vpu | `int` | Check here for map of VPUs https://noaa-owp.github.io/hydrofabric/articles/data_access.html |
+| vpu | `string` | Check here for map of VPUs https://noaa-owp.github.io/hydrofabric/articles/data_access.html |
+
+### other options
+| Field Name | Data Type | Description |
+| --- | --- | --- |
+| verbose | `bool` | Print raw forcing files |
+| output_dir | `string` |  <ol><li>"local" : output to ./data/catchment_forcing_data/</li></ol> |
+| cache | `bool` | <il><li>true: store forcing files locally</li><li> false: interact with forcing files remotely</li></il> |
