@@ -1,0 +1,5 @@
+.vscode/
+data/*
+nwm_filenames/__pycache__/
+subsetting/__pycache__/
+venv/
