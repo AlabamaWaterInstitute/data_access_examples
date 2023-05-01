@@ -13,12 +13,16 @@ contents:
             "varinput"     : 5,
             "geoinput"     : 1,
             "meminput"     : 0,
-            "urlbaseinput" : null
+            "urlbaseinput" : 3
         },
 
         "hydrofab" : {
-            "vpu"          : 14
-        }
+            "vpu"          : "03W"
+        },
+
+        "verbose"     : true,
+        "output_dir"  : "local",
+        "cache"       : true
     }
     
 ### forcing
