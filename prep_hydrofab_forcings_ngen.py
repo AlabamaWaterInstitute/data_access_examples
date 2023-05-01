@@ -16,7 +16,6 @@ import xarray as xr
 from google.cloud import storage
 from rasterio.io import MemoryFile
 from rasterio.features import rasterize
-import rasterio
 import time
 
 from nwm_filenames.listofnwmfilenames import create_file_list
@@ -44,7 +43,7 @@ PARAMETER["false_northing",0.0],PARAMETER["central_meridian",-65.91],PARAMETER["
 PARAMETER["standard_parallel_2",18.1],PARAMETER["latitude_of_origin",18.1],UNIT["Meter",1.0]]'
 
 # paths
-CACHE_DIR = Path(Path.home(), "code", "data_access_examples", "raw_forcing_data")
+CACHE_DIR = Path(Path.home(), "code", "data_access_examples", "data", "raw_forcing_data")
 NWM_CACHE_DIR = os.path.join(CACHE_DIR, "nwm")
 USGS_CACHE_DIR = os.path.join(CACHE_DIR, "usgs")
 GEO_CACHE_DIR = os.path.join(CACHE_DIR, "geo")
@@ -390,6 +389,12 @@ def get_forcing_dict_RTIway2(
 
     return df_dict
 
+def wget(cmd,name):
+    resp = os.system(cmd)  
+    if resp > 0:
+        raise Exception (f'\nwget failed! Tried: {name}\n')
+    else:
+        print(f'Successful download of {name}')    
 
 def main():
     """
@@ -402,31 +407,42 @@ def main():
 
     Will store files in the same folder as the JSON config to run this script
     """
+
+    t00 = time.perf_counter()
+
     parser = argparse.ArgumentParser()
     parser.add_argument(dest="infile", type=str, help="A json containing user inputs to run ngen")
-    args = parser.parse_args()
+    args   = parser.parse_args()
 
     # Take in user config
     conf = json.load(open(args.infile))
-    start_date = conf['forcing']['start_date']
-    end_date   = conf['forcing']['end_date']
-    runinput = conf['forcing']['runinput']
-    varinput = conf['forcing']['varinput']
-    geoinput = conf['forcing']['geoinput']
-    meminput = conf['forcing']['meminput']
+    start_date   = conf['forcing']['start_date']
+    end_date     = conf['forcing']['end_date']
+    runinput     = conf['forcing']['runinput']
+    varinput     = conf['forcing']['varinput']
+    geoinput     = conf['forcing']['geoinput']
+    meminput     = conf['forcing']['meminput']
     urlbaseinput = conf['forcing']['urlbaseinput']
+    vpu          = conf['hydrofab']['vpu']
+    ii_verbose   = conf['verbose']
+    output_dir   = conf['output_dir']
+    ii_cache     = conf['output_dir']
 
-    vpu        = conf['hydrofab']['vpu']
-    # Subsetting ???
+    # TODO: Subsetting!
+    #
 
     # Set paths and make directories if needed
     top_dir    = os.path.dirname(args.infile)
-    data_dir   = os.path.join(top_dir,'raw_forcing_data')
-    output_dir = os.path.join(top_dir,'catchment_forcing_data')
-    if not os.path.exists(data_dir):
-        os.system(f'mkdir {data_dir}')   
-    if not os.path.exists(output_dir):
-        os.system(f'mkdir {output_dir}')  
+    if not os.path.exists(CACHE_DIR):
+        os.system(f'mkdir {CACHE_DIR}') 
+
+    # TODO: Be able to write to anywhere we want (especially AWS bucket)
+    if output_dir == "local":
+        output_dir = Path(top_dir,'data/catchment_forcing_data')
+        if not os.path.exists(output_dir):
+            os.system(f'mkdir {output_dir}')  
+    else:
+        raise NotImplementedError(f"{output_dir} is not an option for output_dir")
 
     # Generate list of file names to retrieve for forcing data
     print(f'Creating list of file names to pull...')
@@ -446,32 +462,63 @@ def main():
         )
     
     # Check to see if we have files cached, if not wget them
-    local_files = []
-    for jfile in nwm_forcing_files:
-        file_parts = jfile.split('/')
-        local_file = os.path.join(data_dir,file_parts[-1])
-        local_files.append(local_file)
-        if os.path.exists(local_file): 
-            continue
-        else:
-            command = f'wget -P {data_dir} -c https://storage.googleapis.com/national-water-model/{jfile}'
-            os.system(command)      
+    if ii_cache:
+        local_files = []
+        for jfile in nwm_forcing_files:
+            if ii_verbose: print(f'Looking for {jfile}')
+            file_parts = Path(jfile).parts
 
-    # TODO wget this if needed
-    gpkg = '/home/jlaser/code/data/nextgen_03W.gpkg'
-    ds   = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
-    src  = ds["RAINRATE"]
+            local_file = os.path.join(CACHE_DIR,file_parts[-1])
+            local_files.append(local_file)
+            if os.path.exists(local_file):             
+                if ii_verbose: print(f'Found and using raw forcing file {local_file}')
+                continue
+            else:
+                if ii_verbose: print(f'Forcing file not found! Downloading {jfile}')
+                command = f'wget -P {CACHE_DIR} -c {jfile}'
+                wget(command,jfile)  
 
-    # Why are we converting to paquet and then back into geopandas dataframe?
-    polygonfile = gpd.read_file(gpkg, layer="divides")
-    parq_file   = os.path.join(data_dir,"ng_03.parquet")
-    polygonfile.to_parquet(parq_file)
-    pkl_file = os.path.join(data_dir,"weights.pkl")
+        cache_files = []
+        for jfile in local_files:
+            splt = Path(jfile).parts
+            cache_files.append(splt[-1])
 
-    print("Generating weights")
-    t1 = time.perf_counter()
-    # generate_weights_file(polygonfile, src, pkl_file, crosswalk_dict_key="id")
-    print(f"Generating the weights took {time.perf_counter() - t1:.2f} s")
+        forcing_files = cache_files   # interacting with files locally
+    else:
+        forcing_files = nwm_forcing_files # interacting with files remotely
+    
+    # Do we need a parquet file?
+    # parq_file   = os.path.join(CACHE_DIR,"ng_03.parquet")
+    # polygonfile.to_parquet(parq_file)
+
+    # Generate weight file only if one doesn't exist already
+    # Very time consuming so we don't want to do this if we can avoid it
+    pkl_file = os.path.join(CACHE_DIR,"weights.pkl")
+    if not os.path.exists(pkl_file):
+        # Search for geopackage that matches the requested VPU, if it exists
+        gpkg = None
+        for jfile in os.listdir(os.path.join(top_dir,'data')):
+            if jfile.find(vpu) >= 0:
+                gpkg = Path(top_dir,"data",jfile)
+                print(f'Found and using geopackge file {gpkg}')
+        if gpkg == None:
+            url = f'https://nextgen-hydrofabric.s3.amazonaws.com/05_nextgen/nextgen_{vpu}.gpkg'
+            command = f'wget -P {CACHE_DIR} -c {url}'
+            wget(command,url)
+
+        print(f'Opening {gpkg}...')
+        polygonfile = gpd.read_file(gpkg, layer="divides")
+
+        ds   = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
+        src  = ds["RAINRATE"]
+
+        print("Generating weights")
+        t1 = time.perf_counter()
+        generate_weights_file(polygonfile, src, pkl_file, crosswalk_dict_key="id")
+        print(f"Generating the weights took {time.perf_counter() - t1:.2f} s")
+    else:
+        print(f"Not creating weight file! Delete this if you want to create a new one: {pkl_file}")
+
     var_list = [
         "U2D",
         "V2D",
@@ -488,22 +535,16 @@ def main():
         "VGRD_10maboveground",
         "DLWRF_surface",
         "APCP_surface",
-        "precip_rate",    # BROKEN
+        "precip_rate",    # BROKEN (Identical to APCP!) 
         "TMP_2maboveground",
         "SPFH_2maboveground",
         "DSWRF_surface",
     ]
-
-    just_files = []
-    for jfile in local_files:
-        splt = jfile.split('/') # Need a way to do this that doesn't break on windows
-        just_files.append(splt[-1])
-
     
     fd2 = get_forcing_dict_JL(
         pkl_file,
-        Path(data_dir),
-        just_files,
+        CACHE_DIR,
+        forcing_files,
         var_list,
         var_list_out,
     )
@@ -516,60 +557,8 @@ def main():
         arr.to_csv(csvname)
 
     print(f'JL write took {time.perf_counter() - t0:.2f} s')
-
-    # fd2 = get_forcing_dict_RTIway2(
-    #     pkl_file,
-    #     polygonfile,
-    #     Path(data_dir),
-    #     just_files,
-    #     var_list,
-    # )    
-
-    # t0 = time.perf_counter()
-    # # pcp_var and pcp_var2 are indentical?
-    # pcp_var = fd2["RAINRATE"]
-    # lw_var = fd2["LWDOWN"]
-    # sw_var = fd2["SWDOWN"]
-    # sp_var = fd2["PSFC"]
-    # tmp_var = fd2["T2D"]
-    # u2d_var = fd2["U2D"]
-    # v2d_var = fd2["V2D"]
-    # pcp_var2 = fd2["RAINRATE"]
-
-    # for _i in range(0, ncatch_out):
-
-    #     pcp_var_0 = pcp_var.transpose()[_i].rename("APCP_surface")
-    #     lw_var_0 = lw_var.transpose()[_i].rename("DLWRF_surface")
-    #     sw_var_0 = sw_var.transpose()[_i].rename("DSWRF_surface")
-    #     sp_var_0 = sp_var.transpose()[_i].rename("SPFH_2maboveground")
-    #     tmp_var_0 = tmp_var.transpose()[_i].rename("TMP_2maboveground")
-    #     u2d_var_0 = u2d_var.transpose()[_i].rename("UGRD_10maboveground")
-    #     v2d_var_0 = v2d_var.transpose()[_i].rename("VGRD_10maboveground")
-    #     pcp_var2_0 = pcp_var2.transpose()[_i].rename("precip_rate")  ##BROKEN!!
-
-    #     d = pd.concat(
-    #         [
-    #             pcp_var_0,
-    #             lw_var_0,
-    #             sw_var_0,
-    #             sp_var_0,
-    #             tmp_var_0,
-    #             u2d_var_0,
-    #             v2d_var_0,
-    #             pcp_var2_0,
-    #         ],
-    #         axis=1,
-    #     )
-    #     d.index.name = "time"
-
-    #     id = polygonfile["id"][_i]
-    #     splt = id.split('-')
-    #     csvname = f"{output_dir}/cat{vpu}_{splt[1]}.csv"
-    #     d.to_csv(csvname)
-
-    # print(f'RTI write took {time.perf_counter() - t0:.2f} s')
-
     print(f'\n\nDone! Catchment forcing files have been generated for VPU {vpu} in {output_dir}\n\n')
+    print(f'Total run time: {time.perf_counter() - t00:.2f} s')
 
 if __name__ == "__main__":
     main()
