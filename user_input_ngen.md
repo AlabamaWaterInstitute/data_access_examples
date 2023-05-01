@@ -31,3 +31,9 @@ contents:
 | geoinput | `int` | <ol><li>conus: for continental US</li><li>hawaii: for Hawaii</li><li>puertorico: for Puerto Rico</li></ol> |
 | meminput | `int` | <ol><li>mem_1</li><li>mem_2</li><li>mem_3</li><li>mem_4</li><li>mem_5</li><li>mem_6</li><li>mem_7</li></ol> |
 | urlbaseinput | `int` | <ol><li>Empty string: use local files</li><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/prod/: for real-time operational data from NOAA</li><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/post-processed/WMS/: for post-processed data from NOAA's Web Map Service</li><li>https://storage.googleapis.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://storage.cloud.google.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>gs://national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://noaa-nwm-retrospective-2-1-pds.s3.amazonaws.com/model_output/: for retrospective data from AWS S3</li><li>s3://noaa-nwm-retrospective-2-1-pds/model_output/: for retrospective data from AWS S3</li></ol> |
+
+
+### hydrofab
+| Field Name | Data Type | Description |
+| --- | --- | --- |
+| vpu | `int` | Check here for map of VPUs https://noaa-owp.github.io/hydrofabric/articles/data_access.html |
