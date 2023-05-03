@@ -6,7 +6,8 @@
 import pickle
 import pandas as pd
 import argparse, os, json
-from sys import getsizeof
+import pyarrow as pa
+import pyarrow.parquet as pq
 import gc
 from pathlib import Path
 import geopandas as gpd
@@ -17,6 +18,8 @@ from google.cloud import storage
 from rasterio.io import MemoryFile
 from rasterio.features import rasterize
 import time
+import boto3
+from io import StringIO, BytesIO
 
 from nwm_filenames.listofnwmfilenames import create_file_list
 from ngen_forcing.process_nwm_forcing_to_ngen import *
@@ -182,9 +185,9 @@ def generate_weights_file(
         else:
             crosswalk_dict[index] = np.where(geom_rasterize == 1)
         
-        if i % 100 == 0:
-            perc = i/len(gdf_proj)*100
-            print(f"{i}, {perc:.2f}%".ljust(40), end="\r")
+        # if i % 100 == 0:
+        #     perc = i/len(gdf_proj)*100
+        #     print(f"{i}, {perc:.2f}%".ljust(40), end="\r")
         i += 1
 
     with open(weights_filepath, "wb") as f:
@@ -303,17 +306,14 @@ def get_forcing_dict_RTIway(
 
 def get_forcing_dict_JL(
     pickle_file,
-    folder_prefix,
     filelist,
     var_list,
     var_list_out
 ):
     t1 = time.perf_counter()
     df_by_t = []    
-    for _i, _nc_file in enumerate(filelist):
-        _full_nc_file = folder_prefix.joinpath(_nc_file)
-        print(f"Data indexing progress -> {_i}, {round(_i/len(filelist), 5)*100}".ljust(40), end="\r")
-        with xr.open_dataset(_full_nc_file) as _xds:
+    for _i, _nc_file in enumerate(filelist):               
+        with xr.open_dataset(_nc_file) as _xds:
             shp   = _xds['U2D'].shape
             data_allvars = np.zeros(
                 shape=(len(var_list),shp[1],shp[2]),
@@ -322,8 +322,9 @@ def get_forcing_dict_JL(
                 data_allvars[var_dx,:,:] = np.squeeze(_xds[jvar].values)
             _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, pickle_file)
             df_by_t.append(_df_zonal_stats)
+        print(f"Indexing catchment data progress -> {_i+1} files proccessed out of {len(filelist)}, {(_i+1)/len(filelist)*100:.2f}%", end="\r")
 
-    print(f'Reformating and converting data into dataframe', end="\r")
+    print(f'Reformating and converting data into dataframe')
     dfs = {}
     for jcat in list(df_by_t[0].keys()):
         data_catch = []
@@ -331,7 +332,7 @@ def get_forcing_dict_JL(
             data_catch.append(df_by_t[jt][jcat])
         dfs[jcat] = pd.DataFrame(data_catch,columns = var_list_out)
 
-    print(f"Indexing data and generating the dataframes (JL) {time.perf_counter() - t1:.2f} s")
+    print(f"Indexing data and generating the dataframes (JL) {time.perf_counter() - t1:.2f}s")
 
     return dfs
 
@@ -425,8 +426,18 @@ def main():
     urlbaseinput = conf['forcing']['urlbaseinput']
     vpu          = conf['hydrofab']['vpu']
     ii_verbose   = conf['verbose']
-    output_dir   = conf['output_dir']
-    ii_cache     = conf['output_dir']
+    bucket_type  = conf['bucket_type']
+    bucket_name  = conf['bucket_name']
+    file_prefix  = conf['file_prefix']
+    file_type    = conf['file_type']
+    ii_cache     = conf['cache']
+
+    file_types = ['csv','parquet']
+    assert file_type in file_types,f'{file_type} for file_type is not accepted! Accepted: {file_types}'
+
+    bucket_types = ['local','S3']
+    assert bucket_type in bucket_types,f'{bucket_type} for bucket_type is not accepted! Accepted: {bucket_types}'
+        
 
     # TODO: Subsetting!
     #
@@ -435,14 +446,18 @@ def main():
     top_dir    = os.path.dirname(args.infile)
     if not os.path.exists(CACHE_DIR):
         os.system(f'mkdir {CACHE_DIR}') 
+        if not os.path.exists(CACHE_DIR):
+            raise Exception(f'Creating {CACHE_DIR} failed!')
 
-    # TODO: Be able to write to anywhere we want (especially AWS bucket)
-    if output_dir == "local":
-        output_dir = Path(top_dir,'data/catchment_forcing_data')
-        if not os.path.exists(output_dir):
-            os.system(f'mkdir {output_dir}')  
-    else:
-        raise NotImplementedError(f"{output_dir} is not an option for output_dir")
+    # Prep output directory
+    if bucket_type == "local":
+        bucket_path = Path(top_dir,file_prefix,bucket_name)
+        if not os.path.exists(bucket_path):
+            os.system(f'mkdir {bucket_path}') 
+            if not os.path.exists(bucket_path):
+                raise Exception(f'Creating {bucket_path} failed!')
+    elif bucket_type == 'S3':
+        s3 = boto3.client('s3')
 
     # Generate list of file names to retrieve for forcing data
     print(f'Creating list of file names to pull...')
@@ -461,8 +476,10 @@ def main():
             lead_time,
         )
     
-    # Check to see if we have files cached, if not wget them
+    # Download whole files and store locally if cache is true, 
+    # otherwise index remotely and save catchment based forcings
     if ii_cache:
+         # Check to see if we have files cached, if not wget them
         local_files = []
         for jfile in nwm_forcing_files:
             if ii_verbose: print(f'Looking for {jfile}')
@@ -478,12 +495,7 @@ def main():
                 command = f'wget -P {CACHE_DIR} -c {jfile}'
                 wget(command,jfile)  
 
-        cache_files = []
-        for jfile in local_files:
-            splt = Path(jfile).parts
-            cache_files.append(splt[-1])
-
-        forcing_files = cache_files   # interacting with files locally
+        forcing_files = local_files   # interacting with files locally
     else:
         forcing_files = nwm_forcing_files # interacting with files remotely
     
@@ -543,21 +555,46 @@ def main():
     
     fd2 = get_forcing_dict_JL(
         pkl_file,
-        CACHE_DIR,
         forcing_files,
         var_list,
         var_list_out,
     )
 
+    # Write CSVs to file
     t0 = time.perf_counter()
-    for jcatch in fd2.keys(): 
-        arr = fd2[jcatch]  
+    write_int = 100
+    write_break = 1000
+    for j, jcatch in enumerate(fd2.keys()): 
+        df = fd2[jcatch]  
         splt = jcatch.split('-')
-        csvname = f"{output_dir}/cat{vpu}_{splt[1]}.csv"
-        arr.to_csv(csvname)
+        
+        if bucket_type == 'local':
+            if file_type == 'csv':
+                csvname = Path(bucket_path,f"cat{vpu}_{splt[1]}.csv")
+                df.to_csv(csvname)
+            if file_type == 'parquet':
+                parq_file = Path(bucket_path,f"cat{vpu}_{splt[1]}.parquet")
+                df.to_parquet(parq_file)
+        elif bucket_type == 'S3': 
+            buf =  BytesIO()
+            if file_type == 'parquet':    
+                parq_file = f"cat{vpu}_{splt[1]}.parquet"   
+                df.to_parquet(buf)                  
+            elif file_type == 'csv':
+                csvname = f"cat{vpu}_{splt[1]}.csv"  
+                df.to_csv(buf, index=False)
+            buf.seek(0)
+            key_name = f'{file_prefix}{csvname}'
+            s3.put_object(Bucket=bucket_name, Key=key_name, Body=buf.getvalue())    
 
-    print(f'JL write took {time.perf_counter() - t0:.2f} s')
-    print(f'\n\nDone! Catchment forcing files have been generated for VPU {vpu} in {output_dir}\n\n')
+        if (j+1) % write_int == 0:
+            print(f"{j+1} files written out of {len(fd2)}, {(j+1)/len(fd2)*100:.2f}%", end="\r")
+
+        if j == write_break: break
+
+    print(f'{file_type} write took {time.perf_counter() - t0:.2f} s\n')
+
+    print(f'\n\nDone! Catchment forcing files have been generated for VPU {vpu} in {bucket_type}\n\n')
     print(f'Total run time: {time.perf_counter() - t00:.2f} s')
 
 if __name__ == "__main__":

@@ -46,5 +46,8 @@ contents:
 | Field Name | Data Type | Description |
 | --- | --- | --- |
 | verbose | `bool` | Print raw forcing files |
-| output_dir | `string` |  <ol><li>"local" : output to ./data/catchment_forcing_data/</li></ol> |
+| output_dir | `string` |  <ol><li>"local" : write to local directory</li><li>"S3" : output to AWS S3 bucket</li></ol> |
+| bucket_name | `string` | If local, this is the name of the folder the data will be placed in. If S3, this is the name of S3 bucket, which must exist already. |
+| file_prefix | `string` | If local, this is the relative path to the bucket_name folder. If S3, this is the relative path within the S3 bucket_name bucket to store files |
+| file_type | `string` | <ol><li>"csv" : write data as csv files/</li><li>"parquet" : write data as parquet files</li></ol> |
 | cache | `bool` | <il><li>true: store forcing files locally</li><li> false: interact with forcing files remotely</li></il> |
