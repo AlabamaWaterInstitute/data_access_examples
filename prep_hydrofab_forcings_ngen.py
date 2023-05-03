@@ -6,8 +6,6 @@
 import pickle
 import pandas as pd
 import argparse, os, json
-import pyarrow as pa
-import pyarrow.parquet as pq
 import gc
 from pathlib import Path
 import geopandas as gpd
@@ -19,7 +17,7 @@ from rasterio.io import MemoryFile
 from rasterio.features import rasterize
 import time
 import boto3
-from io import StringIO, BytesIO
+from io import BytesIO
 
 from nwm_filenames.listofnwmfilenames import create_file_list
 from ngen_forcing.process_nwm_forcing_to_ngen import *
@@ -69,29 +67,6 @@ HUC10_MEDIUM_RANGE_WEIGHTS_FILEPATH = os.path.join(
 
 ROUTE_LINK_FILE = os.path.join(NWM_CACHE_DIR, "RouteLink_CONUS.nc")
 ROUTE_LINK_PARQUET = os.path.join(NWM_CACHE_DIR, "route_link_conus.parquet")
-
-# TODO: Implemenent these function to appropriately calculate precip_rate
-def rho(temp): 
-    """
-        Calculate water density at temperature
-    """
-    return 999.99399 + 0.04216485*temp - 0.007097451*(temp**2) + 0.00003509571*(temp**3) - 9.9037785E-8*(temp**4) 
-
-def aorc_as_rate(dataFrame):
-    """
-        Convert kg/m^2 -> m/s
-    """
-    if isinstance(dataFrame.index, pd.MultiIndex):
-        interval = pd.Series(dataFrame.index.get_level_values(0))
-    else:
-        interval = pd.Series(dataFrame.index)
-    interval = ( interval.shift(-1) - interval ) / np.timedelta64(1, 's')
-    interval.index = dataFrame.index
-    precip_rate = ( dataFrame['APCP_surface'].shift(-1) / dataFrame['TMP_2maboveground'].apply(rho) ) / interval
-    precip_rate.name = 'precip_rate'
-    return precip_rate
-
-######
 
 def parquet_to_gdf(parquet_filepath: str) -> gpd.GeoDataFrame:
     gdf = gpd.read_parquet(parquet_filepath)
@@ -563,7 +538,6 @@ def main():
     # Write CSVs to file
     t0 = time.perf_counter()
     write_int = 100
-    write_break = 1000
     for j, jcatch in enumerate(fd2.keys()): 
         df = fd2[jcatch]  
         splt = jcatch.split('-')
@@ -589,8 +563,6 @@ def main():
 
         if (j+1) % write_int == 0:
             print(f"{j+1} files written out of {len(fd2)}, {(j+1)/len(fd2)*100:.2f}%", end="\r")
-
-        if j == write_break: break
 
     print(f'{file_type} write took {time.perf_counter() - t0:.2f} s\n')
 
