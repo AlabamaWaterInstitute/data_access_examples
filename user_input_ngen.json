@@ -13,7 +13,10 @@
         "vpu"          : "03W"
     },
 
-    "verbose"     : true,
-    "output_dir"  : "local",
+    "verbose"     : false,
+    "bucket_type" : "local",
+    "bucket_name" : "ciroh-devconf",
+    "file_prefix" : "data/",    
+    "file_type"   : "csv",
     "cache"       : true
 }
