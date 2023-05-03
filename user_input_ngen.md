@@ -5,28 +5,28 @@ filename = 'user_input_ngen.json'
 
 contents:
 
-{
-    "forcing"  : {
-        "start_date"   : "20220822",
-        "end_date"     : "20220822",
-        "runinput"     : 2,
-        "varinput"     : 5,
-        "geoinput"     : 1,
-        "meminput"     : 0,
-        "urlbaseinput" : 3
-    },
+    {
+        "forcing"  : {
+            "start_date"   : "20220822",
+            "end_date"     : "20220822",
+            "runinput"     : 2,
+            "varinput"     : 5,
+            "geoinput"     : 1,
+            "meminput"     : 0,
+            "urlbaseinput" : 3
+        },
 
-    "hydrofab" : {
-        "vpu"          : "03W"
-    },
+        "hydrofab" : {
+            "vpu"          : "03W"
+        },
 
-    "verbose"     : false,
-    "bucket_type" : "S3",
-    "bucket_name" : "ciroh-devconf",
-    "file_prefix" : "data/",    
-    "file_type"   : "csv",
-    "cache"       : true
-}
+        "verbose"     : false,
+        "bucket_type" : "S3",
+        "bucket_name" : "ciroh-devconf",
+        "file_prefix" : "data/",    
+        "file_type"   : "csv",
+        "cache"       : true
+    }
     
 ### forcing
 | Field Name | Data Type | Description |
