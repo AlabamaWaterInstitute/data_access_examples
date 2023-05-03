@@ -5,25 +5,28 @@ filename = 'user_input_ngen.json'
 
 contents:
 
-    {
-        "forcing"  : {
-            "start_date"   : "20220822",
-            "end_date"     : "20220822",
-            "runinput"     : 2,
-            "varinput"     : 5,
-            "geoinput"     : 1,
-            "meminput"     : 0,
-            "urlbaseinput" : 3
-        },
+{
+    "forcing"  : {
+        "start_date"   : "20220822",
+        "end_date"     : "20220822",
+        "runinput"     : 2,
+        "varinput"     : 5,
+        "geoinput"     : 1,
+        "meminput"     : 0,
+        "urlbaseinput" : 3
+    },
 
-        "hydrofab" : {
-            "vpu"          : "03W"
-        },
+    "hydrofab" : {
+        "vpu"          : "03W"
+    },
 
-        "verbose"     : true,
-        "output_dir"  : "local",
-        "cache"       : true
-    }
+    "verbose"     : false,
+    "bucket_type" : "S3",
+    "bucket_name" : "ciroh-devconf",
+    "file_prefix" : "data/",    
+    "file_type"   : "csv",
+    "cache"       : true
+}
     
 ### forcing
 | Field Name | Data Type | Description |
@@ -46,7 +49,7 @@ contents:
 | Field Name | Data Type | Description |
 | --- | --- | --- |
 | verbose | `bool` | Print raw forcing files |
-| output_dir | `string` |  <ol><li>"local" : write to local directory</li><li>"S3" : output to AWS S3 bucket</li></ol> |
+| bucket_type | `string` |  <ol><li>"local" : write to local directory</li><li>"S3" : output to AWS S3 bucket</li></ol> |
 | bucket_name | `string` | If local, this is the name of the folder the data will be placed in. If S3, this is the name of S3 bucket, which must exist already. |
 | file_prefix | `string` | If local, this is the relative path to the bucket_name folder. If S3, this is the relative path within the S3 bucket_name bucket to store files |
 | file_type | `string` | <ol><li>"csv" : write data as csv files/</li><li>"parquet" : write data as parquet files</li></ol> |
