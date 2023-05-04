@@ -74,10 +74,6 @@ HUC10_MEDIUM_RANGE_WEIGHTS_FILEPATH = os.path.join(
 ROUTE_LINK_FILE = os.path.join(NWM_CACHE_DIR, "RouteLink_CONUS.nc")
 ROUTE_LINK_PARQUET = os.path.join(NWM_CACHE_DIR, "route_link_conus.parquet")
 
-def parquet_to_gdf(parquet_filepath: str) -> gpd.GeoDataFrame:
-    gdf = gpd.read_parquet(parquet_filepath)
-    return gdf
-
 def get_cache_dir(create: bool = True):
     if not os.path.exists(NWM_CACHE_DIR) and create:
         os.mkdir(NWM_CACHE_DIR)
@@ -171,21 +167,15 @@ def generate_weights_file(
             print(f"{i}, {perc:.2f}%".ljust(40), end="\r")
         i += 1
 
-    with open(weights_filepath, "wb") as f:
-        # TODO: This is a dict of ndarrays, which could be easily stored as a set of parquet files for safekeeping.
-        pickle.dump(crosswalk_dict, f)
+    # with open(weights_filepath, "wb") as f:
+    #     # TODO: This is a dict of ndarrays, which could be easily stored as a set of parquet files for safekeeping.
+    #     pickle.dump(crosswalk_dict, f)
 
-def add_zonalstats_to_gdf_weights(
-    gdf: gpd.GeoDataFrame,
-    src: xr.DataArray,
-    weights_filepath: str,
-) -> gpd.GeoDataFrame:
-    """Calculates zonal stats and adds to GeoDataFrame"""
-    
-    df = calc_zonal_stats_weights(src, weights_filepath)
-    gdf_map = gdf.merge(df, left_on="huc10", right_on="catchment_id")
-
-    return gdf_map
+    # This block was taken from https://github.com/RTIInternational/hydro-evaluation/blob/dev-denno-4-1/src/evaluation/utils.py
+    # TODO: Perhaps import RTI's module, but just do this for now.
+    weights_json = json.dumps({k: [x.tolist() for x in v] for k, v in crosswalk_dict.items()})
+    with open(weights_filepath, "w") as f:
+        f.write(weights_json)
 
 
 def get_blob(blob_name: str, bucket: str = NWM_BUCKET) -> bytes:
@@ -213,8 +203,8 @@ def calc_zonal_stats_weights_new(
 
     # Open weights dict from pickle
     # This could probably be done once and passed as a reference.
-    with open(weights_filepath, "rb") as f:
-        crosswalk_dict = pickle.load(f)
+    with open(weights_filepath, "r") as f:
+        crosswalk_dict = json.load(f)
 
     nvar = src.shape[0]
     mean_dict = {}
@@ -232,61 +222,8 @@ def calc_zonal_stats_weights_new(
 
     return mean_dict
 
-
-def calc_zonal_stats_weights(
-    src: xr.DataArray,
-    weights_filepath: str,    
-) -> pd.DataFrame:
-    """Calculates zonal stats"""
-
-    # Open weights dict from pickle
-    # This could probably be done once and passed as a reference.
-    with open(weights_filepath, "rb") as f:
-        crosswalk_dict = pickle.load(f)
-
-    r_array = src.values[0]
-    r_array[r_array == src.rio.nodata] = np.nan
-
-    mean_dict = {}
-    for key, value in crosswalk_dict.items():
-        mean_dict[key] = np.nanmean(r_array[value])
-
-    df = pd.DataFrame.from_dict(mean_dict, orient="index", columns=["value"])
-
-    df.reset_index(inplace=True, names="catchment_id")
-
-    # This should not be needed, but without memory usage grows
-    del crosswalk_dict
-    del f
-    gc.collect()
-
-    return df
-
-def get_forcing_dict_RTIway(
-    pickle_file,  # This would be a Feature list for parallel calling --
-    # if there is a stored weights file, we use it
-    # (checking for an optional flag to force re-creation of the weights...)
-    folder_prefix,
-    file_list,
-):
-
-    var = "RAINRATE"
-    reng = "rasterio"
-    filehandles = [
-        xr.open_dataset(folder_prefix / f, engine=reng)[var] for f in file_list
-    ]
-    # filehandles = [get_dataset("data/" + f, use_cache=True) for f in file_list]
-    stats = []
-
-    for _i, f in enumerate(filehandles):
-        print(f"{_i}, {round(_i/len(file_list), 2)*100}".ljust(40), end="\r")
-        stats.append(calc_zonal_stats_weights(f, pickle_file))
-
-    [f.close() for f in filehandles]
-    return stats
-
 def get_forcing_dict_JL(
-    pickle_file,
+    wgt_file,
     filelist,
     var_list,
     var_list_out
@@ -301,7 +238,7 @@ def get_forcing_dict_JL(
                 dtype=_xds['U2D'].dtype)
             for var_dx, jvar in enumerate(var_list):
                 data_allvars[var_dx,:,:] = np.squeeze(_xds[jvar].values)
-            _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, pickle_file)
+            _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, wgt_file)
             df_by_t.append(_df_zonal_stats)
         print(f"Indexing catchment data progress -> {_i+1} files proccessed out of {len(filelist)}, {(_i+1)/len(filelist)*100:.2f}%", end="\r")
 
@@ -316,60 +253,6 @@ def get_forcing_dict_JL(
     print(f"Indexing data and generating the dataframes (JL) {time.perf_counter() - t1:.2f}s")
 
     return dfs
-
-def get_forcing_dict_RTIway2(
-    pickle_file,  # This would be a Feature list for parallel calling --
-    # if there is a stored weights file, we use it
-    # (checking for an optional flag to force re-creation of the weights...)
-    gpkg_divides,
-    folder_prefix,
-    filelist,
-    var_list,
-):
-    t1=time.perf_counter()
-    reng = "rasterio"
-    pick_val = "value"
-
-    df_dict = {}
-    dl_dict = {}
-    for _v in var_list:
-        df_dict[_v] = pd.DataFrame(index=gpkg_divides.index)
-        dl_dict[_v] = []
-
-    # ds_list = []
-    for _i, _nc_file in enumerate(filelist):
-        # _nc_file = ("nwm.t00z.medium_range.forcing.f001.conus.nc")
-        _full_nc_file = folder_prefix.joinpath(_nc_file)
-
-        try:
-            # with xr.open_dataset(_full_nc_file, engine=reng) as _xds:
-            with xr.open_dataset(_full_nc_file) as _xds:
-                # _xds = ds_list[_i]
-                # _xds.rio.write_crs(rasterio.crs.CRS.from_wkt(CONUS_NWM_WKT), inplace=True)
-                print(f"{_i}, {round(_i/len(filelist), 5)*100}".ljust(40), end="\r")
-                for _v in var_list:
-                    _src = _xds[_v]
-                    _df_zonal_stats = calc_zonal_stats_weights(_src, pickle_file)
-                    # if adding statistics back to original GeoDataFrame
-                    # gdf3 = pd.concat([gpkg_divides, _df_zonal_stats], axis=1)
-                    _df = pd.DataFrame(index=gpkg_divides.index)
-                    _df[_xds.time.values[0]] = _df_zonal_stats[pick_val]
-                    # TODO: This same line could add the new values directly
-                    # to the same dictionary. But after adding about 100 of them,
-                    # pandas starts to complain about degraded performance due to
-                    # fragmentation of the dataframe. We tried it this was as a
-                    # workaround, with the loop below to accomplish the concatenation.
-                    dl_dict[_v].append(_df)
-        except:
-            print(f"No such file: {_full_nc_file}")
-
-    for _v in var_list:
-        df_dict[_v] = pd.concat(dl_dict[_v], axis=1)
-
-    # [_xds.close() for _xds in ds_list]
-    print(f"Indexing data and generating the dataframes (RTI) {time.perf_counter() - t1:.2f} s")
-
-    return df_dict
 
 def wget(cmd,name,semaphore=None):
     if not semaphore == None: semaphore.acquire()
@@ -398,9 +281,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(dest="infile", type=str, help="A json containing user inputs to run ngen")
     args   = parser.parse_args()
-
-    # Increase for more threads
-    dl_threads = 10
 
     # Take in user config
     conf = json.load(open(args.infile))
@@ -435,7 +315,7 @@ def main():
     #
 
     # Set paths and make directories if needed
-    top_dir    = os.path.dirname(args.infile)
+    top_dir    = Path(os.path.dirname(args.infile)).parent
     if not os.path.exists(CACHE_DIR):
         os.system(f'mkdir {CACHE_DIR}') 
         if not os.path.exists(CACHE_DIR):
@@ -497,9 +377,6 @@ def main():
                 command = f'wget -P {CACHE_DIR} -c {jfile}'
                 cmds.append(command)
                 fls.append(jfile)
-                
-                # TODO make this async!
-                # wget(command,jfile)
 
         threads = []        
         semaphore = threading.Semaphore(dl_threads)
@@ -515,16 +392,12 @@ def main():
     else:
         forcing_files = nwm_forcing_files # interacting with files remotely
 
-    print(f'SERIAL Time to dl files {time.perf_counter() - t0}')
-    
-    # Do we need a parquet file?
-    # parq_file   = os.path.join(CACHE_DIR,"ng_03.parquet")
-    # polygonfile.to_parquet(parq_file)
+    print(f'Time to download files {time.perf_counter() - t0}')
 
     # Generate weight file only if one doesn't exist already
     # Very time consuming so we don't want to do this if we can avoid it
-    pkl_file = os.path.join(CACHE_DIR,"weights.pkl")
-    if not os.path.exists(pkl_file):
+    wgt_file = os.path.join(CACHE_DIR,"weights.json")
+    if not os.path.exists(wgt_file):
         # Search for geopackage that matches the requested VPU, if it exists
         gpkg = None
         for jfile in os.listdir(os.path.join(top_dir,'data')):
@@ -544,10 +417,10 @@ def main():
 
         print("Generating weights")
         t1 = time.perf_counter()
-        generate_weights_file(polygonfile, src, pkl_file, crosswalk_dict_key="id")
+        generate_weights_file(polygonfile, src, wgt_file, crosswalk_dict_key="id")
         print(f"Generating the weights took {time.perf_counter() - t1:.2f} s")
     else:
-        print(f"Not creating weight file! Delete this if you want to create a new one: {pkl_file}")
+        print(f"Not creating weight file! Delete this if you want to create a new one: {wgt_file}")
 
     var_list = [
         "U2D",
@@ -572,7 +445,7 @@ def main():
     ]
     
     fd2 = get_forcing_dict_JL(
-        pkl_file,
+        wgt_file,
         forcing_files,
         var_list,
         var_list_out,
