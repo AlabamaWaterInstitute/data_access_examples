@@ -11,6 +11,7 @@
     },
 
     "hydrofab" : {
+        "version"      : "v1.2",
         "vpu"          : "03W"
     },
 
