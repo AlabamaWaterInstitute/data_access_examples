@@ -2,6 +2,7 @@
     "forcing"  : {
         "start_date"   : "20220822",
         "end_date"     : "20220822",
+        "nwm_files"    : "",
         "runinput"     : 2,
         "varinput"     : 5,
         "geoinput"     : 1,
@@ -13,10 +14,12 @@
         "vpu"          : "03W"
     },
 
-    "verbose"     : false,
+    "verbose"     : true,
     "bucket_type" : "S3",
     "bucket_name" : "ciroh-devconf",
     "file_prefix" : "data/",    
     "file_type"   : "csv",
-    "cache"       : true
+    "cache"       : true,
+    "dl_threads"  : 10
+    
 }
