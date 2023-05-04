@@ -18,6 +18,7 @@ contents:
         },
 
         "hydrofab" : {
+            "version"      : "v1.2",
             "vpu"          : "03W"
         },
 
@@ -30,6 +31,7 @@ contents:
         "dl_threads"  : 10
         
     }
+
     
 ### forcing
 | Field Name | Data Type | Description |
@@ -46,6 +48,7 @@ contents:
 ### hydrofab
 | Field Name | Data Type | Description |
 | --- | --- | --- |
+| version | `string` | Current hydrofabric version |
 | vpu | `string` | Check here for map of VPUs https://noaa-owp.github.io/hydrofabric/articles/data_access.html |
 
 ### other options

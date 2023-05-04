@@ -308,6 +308,7 @@ def main():
     geoinput = conf["forcing"]["geoinput"]
     meminput = conf["forcing"]["meminput"]
     urlbaseinput = conf["forcing"]["urlbaseinput"]
+    version   = conf["hydrofab"]["version"]
     vpu = conf["hydrofab"]["vpu"]
     ii_verbose = conf["verbose"]
     bucket_type = conf["bucket_type"]
@@ -315,7 +316,8 @@ def main():
     file_prefix = conf["file_prefix"]
     file_type = conf["file_type"]
     ii_cache = conf["cache"]
-    dl_threads = conf["dl_threads"]
+    if ii_cache:
+        dl_threads = conf["dl_threads"]
 
     file_types = ["csv", "parquet"]
     assert (
@@ -351,8 +353,11 @@ def main():
     if len(nwm_files) == 0:
         print(f"Creating list of file names to pull...")
         n = 6
-        fcst_cycle = [n * x for x in range(24 // n)]
-        lead_time = [x + 1 for x in range(n)]
+        # fcst_cycle = [n*x for x in range(24//n)]
+        # lead_time  = [x+1 for x in range(n)]
+        fcst_cycle = []
+        lead_time = None
+
         nwm_forcing_files = create_file_list(
             runinput,
             varinput,
@@ -424,7 +429,7 @@ def main():
                 gpkg = Path(top_dir, "data", jfile)
                 print(f"Found and using geopackge file {gpkg}")
         if gpkg == None:
-            url = f"https://nextgen-hydrofabric.s3.amazonaws.com/05_nextgen/nextgen_{vpu}.gpkg"
+            url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
             command = f"wget -P {CACHE_DIR} -c {url}"
             wget(command, url)
 
