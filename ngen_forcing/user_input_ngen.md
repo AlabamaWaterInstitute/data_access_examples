@@ -36,7 +36,7 @@ contents:
 | --- | --- | --- |
 | start_date | `string` | YYYYMMDD |
 | end_date | `string` | YYYYMMDD |
-| nwm_files | `string` | Path to a text file containing nwm file names. One filename per line. To have nwm forcing file names generated automatically, leave this option out of the config or set it to "".  |
+| nwm_files | `string` | Path to a text file containing nwm file names. One filename per line. To have nwm forcing file names generated automatically, leave this option out of the config or set it to ""  |
 | runinput | `int` | <ol><li>short_range</li><li>medium_range</li><li>medium_range_no_da</li><li>long_range</li><li>analysis_assim</li><li>analysis_assim_extend</li><li>analysis_assim_extend_no_da</li><li>analysis_assim_long</li><li>analysis_assim_long_no_da</li><li>analysis_assim_no_da</li><li>short_range_no_da</li></ol> |
 | varinput | `int` | <ol><li>channel_rt: for real-time channel data</li><li>land: for land data</li><li>reservoir: for reservoir data</li><li>terrain_rt: for real-time terrain data</li><li>forcing: for forcing data</li></ol> |
 | geoinput | `int` | <ol><li>conus: for continental US</li><li>hawaii: for Hawaii</li><li>puertorico: for Puerto Rico</li></ol> |
@@ -56,5 +56,5 @@ contents:
 | bucket_name | `string` | If local, this is the name of the folder the data will be placed in. If S3, this is the name of S3 bucket, which must exist already. |
 | file_prefix | `string` | If local, this is the relative path to the bucket_name folder. If S3, this is the relative path within the S3 bucket_name bucket to store files |
 | file_type | `string` | <ol><li>"csv" : write data as csv files/</li><li>"parquet" : write data as parquet files</li></ol> |
-| cache | `bool` | <il><li>true: store forcing files locally</li><li> false: interact with forcing files remotely</li></il> |
-| dl_threads | `int` | Number of threads to use while downloading |
+| cache | `bool` | <il><li>true: Store forcing files locally. Must specify dl_threads</li><li> false: Interact with forcing files remotely</li></il>  |
+| dl_threads | `int` | Number of threads to use while downloading. |
