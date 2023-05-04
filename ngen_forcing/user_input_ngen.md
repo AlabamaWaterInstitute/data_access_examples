@@ -10,7 +10,7 @@ contents:
             "start_date"   : "20220822",
             "end_date"     : "20220822",
             "nwm_files"    : "",
-            "runinput"     : 2,
+            "runinput"     : 1,
             "varinput"     : 5,
             "geoinput"     : 1,
             "meminput"     : 0,
