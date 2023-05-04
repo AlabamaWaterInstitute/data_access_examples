@@ -166,7 +166,7 @@ def create_file_list(
     urlbaseinput=None,
     lead_time=None,  # TODO: change this order; placed here to avoid breaking change
 ):
-    # for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates
+    """ for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates"""
 
     runsuff = ""
 
