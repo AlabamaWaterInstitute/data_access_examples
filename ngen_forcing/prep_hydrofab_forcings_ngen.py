@@ -51,7 +51,7 @@ PARAMETER["standard_parallel_2",18.1],PARAMETER["latitude_of_origin",18.1],UNIT[
 
 # TODO Make CACHE_DIR configurable
 CACHE_DIR = Path(
-    pkg_dir.parent, "data", "raw_forcing_data"
+    pkg_dir.parent, "data", "raw_data"
 )  # Maybe this should have a date attached to the name
 
 NWM_CACHE_DIR = os.path.join(CACHE_DIR, "nwm")
@@ -422,19 +422,18 @@ def main():
     if not os.path.exists(wgt_file):
         # Search for geopackage that matches the requested VPU, if it exists
         gpkg = None
-        for jfile in os.listdir(os.path.join(top_dir, "data")):
-            if jfile.find(vpu) >= 0:
-                gpkg = Path(top_dir, "data", jfile)
+        for jfile in os.listdir(CACHE_DIR):
+            if jfile.find(f"nextgen_{vpu}.gpkg") >= 0:
+                gpkg = Path(CACHE_DIR, jfile)
                 print(f"Found and using geopackge file {gpkg}")
         if gpkg == None:
-            gpkg = f"nextgen_{vpu}.gpkg"
-            url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/{gpkg}"
+            url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
             command = f"wget -P {CACHE_DIR} -c {url}"
             wget(command, url)
-            local_gpkg = Path(top_dir, "data",gpkg)
+            gpkg = Path(CACHE_DIR, f"nextgen_{vpu}.gpkg")
 
-        print(f"Opening {local_gpkg}...")
-        polygonfile = gpd.read_file(local_gpkg, layer="divides")
+        print(f"Opening {gpkg}...")
+        polygonfile = gpd.read_file(gpkg, layer="divides")
 
         ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
         src = ds["RAINRATE"]
@@ -469,7 +468,7 @@ def main():
         "SPFH_2maboveground",
         "DSWRF_surface",
     ]
-
+    
     fd2 = get_forcing_dict_JL(
         wgt_file,
         forcing_files,
@@ -477,6 +476,7 @@ def main():
         var_list_out,
     )
 
+    print(f'Writting data!')
     # Write CSVs to file
     t0 = time.perf_counter()
     write_int = 100
