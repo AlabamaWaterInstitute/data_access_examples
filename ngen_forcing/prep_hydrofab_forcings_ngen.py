@@ -352,11 +352,10 @@ def main():
     # Get nwm forcing file names
     if len(nwm_files) == 0:
         print(f"Creating list of file names to pull...")
-        n = 6
+        # n = 6
         # fcst_cycle = [n*x for x in range(24//n)]
         # lead_time  = [x+1 for x in range(n)]
-        fcst_cycle = []
-        lead_time = None
+        fcst_cycle = [0]
 
         nwm_forcing_files = create_file_list(
             runinput,
@@ -367,7 +366,6 @@ def main():
             end_date,
             fcst_cycle,
             urlbaseinput,
-            lead_time,
         )
     else:
         print(f"Reading list of file names from {nwm_files}...")
@@ -429,12 +427,14 @@ def main():
                 gpkg = Path(top_dir, "data", jfile)
                 print(f"Found and using geopackge file {gpkg}")
         if gpkg == None:
-            url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
+            gpkg = f"nextgen_{vpu}.gpkg"
+            url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/{gpkg}"
             command = f"wget -P {CACHE_DIR} -c {url}"
             wget(command, url)
+            local_gpkg = Path(top_dir, "data",gpkg)
 
-        print(f"Opening {gpkg}...")
-        polygonfile = gpd.read_file(gpkg, layer="divides")
+        print(f"Opening {local_gpkg}...")
+        polygonfile = gpd.read_file(local_gpkg, layer="divides")
 
         ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
         src = ds["RAINRATE"]
