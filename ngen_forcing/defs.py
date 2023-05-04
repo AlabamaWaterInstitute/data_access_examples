@@ -1,5 +1,6 @@
 import rasterio.mask as riomask
 
+
 def polymask(dataset, invert=False, all_touched=False):
     def _polymask(poly):
         return riomask.raster_geometry_mask(

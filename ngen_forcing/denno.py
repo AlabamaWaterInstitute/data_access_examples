@@ -1,4 +1,3 @@
-
 # https://github.com/jameshalgren/data-access-examples/blob/DONOTMERGE_VPU16/ngen_forcing/VERYROUGH_RTI_Forcing_example.ipynb
 
 # !pip install --upgrade google-api-python-client
@@ -20,7 +19,7 @@ from rasterio.features import rasterize
 
 from nwm_filenames.listofnwmfilenames import create_file_list
 
-DATA_DIR = Path(Path.home(),"code","data")
+DATA_DIR = Path(Path.home(), "code", "data")
 
 TEMPLATE_BLOB_NAME = (
     "nwm.20221001/forcing_medium_range/nwm.t00z.medium_range.forcing.f001.conus.nc"
@@ -73,6 +72,7 @@ def parquet_to_gdf(parquet_filepath: str) -> gpd.GeoDataFrame:
     gdf = gpd.read_parquet(parquet_filepath)
     return gdf
 
+
 def get_cache_dir(create: bool = True):
     if not os.path.exists(NWM_CACHE_DIR) and create:
         os.mkdir(NWM_CACHE_DIR)
@@ -80,8 +80,10 @@ def get_cache_dir(create: bool = True):
         raise NotADirectoryError
     return NWM_CACHE_DIR
 
+
 def make_parent_dir(filepath):
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+
 
 def get_dataset(blob_name: str, use_cache: bool = True) -> xr.Dataset:
     """Retrieve a blob from the data service as xarray.Dataset.
@@ -131,7 +133,8 @@ def get_dataset(blob_name: str, use_cache: bool = True) -> xr.Dataset:
                 engine="h5netcdf",
             )
         return ds
-    
+
+
 def generate_weights_file(
     gdf: gpd.GeoDataFrame,
     src: xr.DataArray,
@@ -146,8 +149,8 @@ def generate_weights_file(
 
     # This is a probably a really poor performing way to do this
     # TODO: Consider vectorizing -- would require digging into the
-    # other end of these where we unpack the weights...  
-    i = 0  
+    # other end of these where we unpack the weights...
+    i = 0
     for index, row in gdf_proj.iterrows():
         geom_rasterize = rasterize(
             [(row["geometry"], 1)],
@@ -161,16 +164,18 @@ def generate_weights_file(
             crosswalk_dict[row[crosswalk_dict_key]] = np.where(geom_rasterize == 1)
         else:
             crosswalk_dict[index] = np.where(geom_rasterize == 1)
-        
+
         if i % 100 == 0:
-            perc = i/len(gdf_proj)*100
+            perc = i / len(gdf_proj) * 100
             print(f"{i}, {perc:.2f}%".ljust(40), end="\r")
-            if perc > 0.01: break
+            if perc > 0.01:
+                break
         i += 1
 
     with open(weights_filepath, "wb") as f:
         # TODO: This is a dict of ndarrays, which could be easily stored as a set of parquet files for safekeeping.
         pickle.dump(crosswalk_dict, f)
+
 
 def add_zonalstats_to_gdf_weights(
     gdf: gpd.GeoDataFrame,
@@ -240,7 +245,6 @@ def get_forcing_dict_RTIway(
     folder_prefix,
     file_list,
 ):
-
     var = "RAINRATE"
     reng = "rasterio"
     filehandles = [
@@ -312,7 +316,7 @@ def get_forcing_dict_RTIway2(
 
 def main():
     """
-    Primary function to retrieve hydrofabrics data and convert it into files that can be ingested into ngen. 
+    Primary function to retrieve hydrofabrics data and convert it into files that can be ingested into ngen.
     Also, the forcing data is retrieved.
 
     Inputs: <arg1> JSON config file specifying start_date, end_date, and vpu
@@ -322,68 +326,70 @@ def main():
     Will store files in the same folder as the JSON config to run this script
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument(dest="infile", type=str, help="A json containing user inputs to run ngen")
+    parser.add_argument(
+        dest="infile", type=str, help="A json containing user inputs to run ngen"
+    )
     args = parser.parse_args()
 
     # Take in user config
     conf = json.load(open(args.infile))
-    start_date = conf['forcing']['start_date']
-    end_date   = conf['forcing']['end_date']
-    vpu        = conf['hydrofab']['vpu']
+    start_date = conf["forcing"]["start_date"]
+    end_date = conf["forcing"]["end_date"]
+    vpu = conf["hydrofab"]["vpu"]
 
-    top_dir  = os.path.dirname(args.infile)
-    data_dir = os.path.join(top_dir,'forcing_data')
+    top_dir = os.path.dirname(args.infile)
+    data_dir = os.path.join(top_dir, "forcing_data")
     if not os.path.exists(data_dir):
-        os.system(f'mkdir {data_dir}')   
+        os.system(f"mkdir {data_dir}")
 
     # Generate list of file names to retrieve for forcing data
     # Going to make assumptions here as to which forecasts we want
     # Check the dictionaries at the top of listofnwmfilenames for options
-    n = 6 # How rapidly we want our forecasts, I think 3 is the highest frequency
-    fcst_cycle = [n*x for x in range(24//n)]
-    lead_time  = [x+1 for x in range(n)]
+    n = 6  # How rapidly we want our forecasts, I think 3 is the highest frequency
+    fcst_cycle = [n * x for x in range(24 // n)]
+    lead_time = [x + 1 for x in range(n)]
     # fcst_cycle = None  # Retrieves a full day for each day within the range given.
-    runinput = 2 
+    runinput = 2
     varinput = 5
     geoinput = 1
     meminput = 0
     urlbaseinput = None
 
-    print(f'Creating list of file names to pull...')
+    print(f"Creating list of file names to pull...")
     nwm_forcing_files = create_file_list(
-            runinput,
-            varinput,
-            geoinput,
-            meminput,
-            start_date,
-            end_date,
-            fcst_cycle,
-            urlbaseinput,
-            lead_time,
-        )
-    
+        runinput,
+        varinput,
+        geoinput,
+        meminput,
+        start_date,
+        end_date,
+        fcst_cycle,
+        urlbaseinput,
+        lead_time,
+    )
 
-    print(f'Pulling files...')
+    print(f"Pulling files...")
     local_files = []
     for jfile in nwm_forcing_files:
-        file_parts = jfile.split('/')
-        local_file = os.path.join(data_dir,file_parts[-1])
+        file_parts = jfile.split("/")
+        local_file = os.path.join(data_dir, file_parts[-1])
         local_files.append(local_file)
-        if os.path.exists(local_file): continue
+        if os.path.exists(local_file):
+            continue
         else:
-            command = f'wget -P {data_dir} -c https://storage.googleapis.com/national-water-model/{jfile}'
-            os.system(command)      
+            command = f"wget -P {data_dir} -c https://storage.googleapis.com/national-water-model/{jfile}"
+            os.system(command)
 
     # Download dataset, read into df with geopandas
-    gpkg = os.path.join(DATA_DIR,'nextgen_03W.gpkg')
-    ds   = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
-    src  = ds["RAINRATE"]
+    gpkg = os.path.join(DATA_DIR, "nextgen_03W.gpkg")
+    ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
+    src = ds["RAINRATE"]
 
     # Why are we converting to paquet and then back into geopandas dataframe?
     polygonfile = gpd.read_file(gpkg, layer="divides")
-    parq_file   = os.path.join(DATA_DIR,"ng_03.parquet")
+    parq_file = os.path.join(DATA_DIR, "ng_03.parquet")
     polygonfile.to_parquet(parq_file)
-    pkl_file = os.path.join(DATA_DIR,"weights.pkl")
+    pkl_file = os.path.join(DATA_DIR, "weights.pkl")
     generate_weights_file(polygonfile, src, pkl_file, crosswalk_dict_key="id")
     calc_zonal_stats_weights(src, pkl_file)
 
@@ -459,7 +465,6 @@ def main():
     for _i, cat_id in enumerate(gpkg_divides["id"]):
         print(f"mv cat16_{_i:07}.csv cat16_{cat_id}.csv")
 
+
 if __name__ == "__main__":
-    
     main()
- 
