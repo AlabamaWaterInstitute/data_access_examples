@@ -55,7 +55,7 @@ def makename(
     urlbase_prefix="",
 ):
 
-    """This function handles preprocessed text and converts it into the applicable url to access the appropriate file"""
+    """This function handles preprocessed text and converts it into the applicable url to access the appropriate file."""
 
     datetxt = f"nwm.{date.strftime('%Y%m%d')}"
     foldertxt = f"{run_type}{run_typesuffix}"
@@ -65,6 +65,9 @@ def makename(
 
 # setting run_type
 def run_type(runinput, varinput, geoinput, default=""):
+
+    """This function takes the numeric command line input and converts to the text used in the url."""
+
     if varinput == 5:  # if forcing
         if runinput == 5 and geoinput == 2:  # if analysis_assim and hawaii
             return "forcing_analysis_assim_hawaii"
