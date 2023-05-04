@@ -54,6 +54,9 @@ def makename(
     run_typesuffix="",
     urlbase_prefix="",
 ):
+
+    """This function handles preprocessed text and converts it into the applicable url to access the appropriate file"""
+
     datetxt = f"nwm.{date.strftime('%Y%m%d')}"
     foldertxt = f"{run_type}{run_typesuffix}"
     filetxt = f"nwm.t{fcst_cycle:02d}z.{run_name}{runsuffix}.{var_name}{varsuffix}.{fhprefix}{fcst_hour:03d}.{geography}.nc"
@@ -189,11 +192,7 @@ def create_file_list(
         _dtstart = today
         _until = today
 
-    dates = rrule.rrule(
-        rrule.DAILY,
-        dtstart=_dtstart,
-        until=_until,
-    )
+    dates = rrule.rrule(rrule.DAILY, dtstart=_dtstart, until=_until,)
     run_t = run_type(runinput, varinput, geoinput, run_name)
     fhp = fhprefix(runinput)
     vsuff = varsuffix(meminput)
