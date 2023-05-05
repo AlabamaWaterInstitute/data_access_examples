@@ -243,7 +243,7 @@ def get_forcing_dict_JL(
     full_list = local_filelist + remote_filelist
     df_by_t = []
     # NOTE this scheme uses the same algorithm for remote and local processing. This may not be desireable
-    if ii_cache:
+    if nlocal > 0:
         eng = 'h5netcdf'
     for _i, _nc_file in enumerate(full_list):
         if _i == nlocal: eng = 'rasterio' # switch engine for remote processing       
