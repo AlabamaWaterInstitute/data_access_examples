@@ -509,7 +509,7 @@ def main():
     fd2 = get_forcing_dict_JL(
         wgt_file,
         local_nwm_files,
-        remote_nwm_files[:5],
+        remote_nwm_files,
         var_list,
         var_list_out,
         ii_cache
