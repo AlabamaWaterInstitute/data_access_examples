@@ -9,12 +9,13 @@ contents:
         "forcing"  : {
             "start_date"   : "20220822",
             "end_date"     : "20220822",
-            "nwm_files"    : "",
+            "nwm_file"     : "",
             "runinput"     : 1,
             "varinput"     : 5,
             "geoinput"     : 1,
             "meminput"     : 0,
-            "urlbaseinput" : 3
+            "urlbaseinput" : 3,
+            "cache"        : false
         },
 
         "hydrofab" : {
@@ -23,14 +24,14 @@ contents:
         },
 
         "verbose"     : true,
-        "bucket_type" : "S3",
-        "bucket_name" : "ciroh-devconf",
+        "bucket_type" : "local",
+        "bucket_name" : "out_data_CIROH",
         "file_prefix" : "data/",    
         "file_type"   : "csv",
-        "cache"       : true,
         "dl_threads"  : 10
         
     }
+
 
     
 ### forcing
@@ -44,6 +45,7 @@ contents:
 | geoinput | `int` | <ol><li>conus: for continental US</li><li>hawaii: for Hawaii</li><li>puertorico: for Puerto Rico</li></ol> |
 | meminput | `int` | <ol><li>mem_1</li><li>mem_2</li><li>mem_3</li><li>mem_4</li><li>mem_5</li><li>mem_6</li><li>mem_7</li></ol> |
 | urlbaseinput | `int` | <ol><li>Empty string: use local files</li><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/prod/: for real-time operational data from NOAA</li><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/post-processed/WMS/: for post-processed data from NOAA's Web Map Service</li><li>https://storage.googleapis.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://storage.cloud.google.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>gs://national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://noaa-nwm-retrospective-2-1-pds.s3.amazonaws.com/model_output/: for retrospective data from AWS S3</li><li>s3://noaa-nwm-retrospective-2-1-pds/model_output/: for retrospective data from AWS S3</li></ol> |
+| cache | `bool` | <il><li>true: Store forcing files locally. Must specify dl_threads</li><li> false: Interact with forcing files remotely</li></il>  |
 
 ### hydrofab
 | Field Name | Data Type | Description |
@@ -59,5 +61,4 @@ contents:
 | bucket_name | `string` | If local, this is the name of the folder the data will be placed in. If S3, this is the name of S3 bucket, which must exist already. |
 | file_prefix | `string` | If local, this is the relative path to the bucket_name folder. If S3, this is the relative path within the S3 bucket_name bucket to store files |
 | file_type | `string` | <ol><li>"csv" : write data as csv files/</li><li>"parquet" : write data as parquet files</li></ol> |
-| cache | `bool` | <il><li>true: Store forcing files locally. Must specify dl_threads</li><li> false: Interact with forcing files remotely</li></il>  |
 | dl_threads | `int` | Number of threads to use while downloading. |

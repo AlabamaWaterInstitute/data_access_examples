@@ -2,12 +2,13 @@
     "forcing"  : {
         "start_date"   : "20220822",
         "end_date"     : "20220822",
-        "nwm_files"    : "",
+        "nwm_file"     : "",
         "runinput"     : 1,
         "varinput"     : 5,
         "geoinput"     : 1,
         "meminput"     : 0,
-        "urlbaseinput" : 3
+        "urlbaseinput" : 3,
+        "cache"        : false
     },
 
     "hydrofab" : {
@@ -16,11 +17,10 @@
     },
 
     "verbose"     : true,
-    "bucket_type" : "S3",
-    "bucket_name" : "ciroh-devconf",
+    "bucket_type" : "local",
+    "bucket_name" : "out_data_CIROH",
     "file_prefix" : "data/",    
     "file_type"   : "csv",
-    "cache"       : true,
     "dl_threads"  : 10
     
 }
