@@ -504,7 +504,6 @@ def main():
     # Considering possible memory constraints in this operation, 
     # let's loop though a certain number of files, write them out, and go back for more
     t0 = time.perf_counter()
-    local_nwm_files = []
     
     fd2 = get_forcing_dict_JL(
         wgt_file,
