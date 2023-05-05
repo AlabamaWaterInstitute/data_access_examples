@@ -230,29 +230,27 @@ def calc_zonal_stats_weights_new(
 
 
 def get_forcing_dict_JL(
-        wgt_file : str, 
-        local_filelist : list, 
-        remote_filelist : list, 
-        var_list : list , 
-        var_list_out : list, 
-        ii_cache : bool
-        ):
-    
+    wgt_file: str,
+    local_filelist: list,
+    remote_filelist: list,
+    var_list: list,
+    var_list_out: list,
+    ii_cache: bool,
+):
     t1 = time.perf_counter()
     nlocal = len(local_filelist)
     full_list = local_filelist + remote_filelist
     df_by_t = []
     # NOTE this scheme uses the same algorithm for remote and local processing. This may not be desireable
     if nlocal > 0:
-        eng = 'h5netcdf'
+        eng = "h5netcdf"
     for _i, _nc_file in enumerate(full_list):
-        if _i == nlocal: eng = 'rasterio' # switch engine for remote processing       
-        with xr.open_dataset(_nc_file,engine=eng) as _xds:
+        if _i == nlocal:
+            eng = "rasterio"  # switch engine for remote processing
+        with xr.open_dataset(_nc_file, engine=eng) as _xds:
             shp = _xds["U2D"].shape
             dtp = _xds["U2D"].dtype
-            data_allvars = np.zeros(
-                            shape=(len(var_list), shp[1], shp[2]), dtype=dtp
-                        )             
+            data_allvars = np.zeros(shape=(len(var_list), shp[1], shp[2]), dtype=dtp)
             for var_dx, jvar in enumerate(var_list):
                 data_allvars[var_dx, :, :] = np.squeeze(_xds[jvar].values)
             _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, wgt_file)
@@ -262,7 +260,7 @@ def get_forcing_dict_JL(
             end="\r",
         )
 
-    print(f"Reformating and converting data into dataframe")
+    print(f"\nReformating and converting data into dataframe")
     dfs = {}
     for jcat in list(df_by_t[0].keys()):
         data_catch = []
@@ -289,71 +287,71 @@ def threaded_cmd(cmd, semaphore=None):
     if not semaphore == None:
         semaphore.release()
 
+
 def locate_dl_files_threaded(
-        ii_cache: bool,
-        ii_verbose : bool,
-        forcing_file_names : list,
-        dl_threads : int
+    ii_cache: bool, ii_verbose: bool, forcing_file_names: list, dl_threads: int
 ):
-        """
-        Look for forcing files locally, if found, will apend to local file list for local processing
-        If not found and if we do not wish to cache, append to remote files for remote processing
-        If not found and if we do wish to cache, append to local file list for local processing and perform a threaded download
-        """
-        
-        local_files  = []
-        remote_files = []
-        dl_files = []
-        cmds = []                
-        for jfile in forcing_file_names:
+    """
+    Look for forcing files locally, if found, will apend to local file list for local processing
+    If not found and if we do not wish to cache, append to remote files for remote processing
+    If not found and if we do wish to cache, append to local file list for local processing and perform a threaded download
+    """
+
+    local_files = []
+    remote_files = []
+    dl_files = []
+    cmds = []
+    for jfile in forcing_file_names:
+        if ii_verbose:
+            print(f"Looking for {jfile}")
+        file_parts = Path(jfile).parts
+
+        local_file = os.path.join(CACHE_DIR, file_parts[-1])
+
+        # decide whether to use local file, download it, or index it remotely
+        if os.path.exists(local_file):
+            # If the file exists local, get data from this file regardless of ii_cache option
+            if ii_verbose and ii_cache:
+                print(f"Found and using local raw forcing file {local_file}")
+            elif ii_verbose and not ii_cache:
+                print(
+                    f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}"
+                )
+            local_files.append(local_file)
+        elif not os.path.exists(local_file) and not ii_cache:
+            # If file is not found locally, and we don't want to cache it, append to remote file list
+            remote_files.append(jfile)
+        elif not os.path.exists(local_file) and ii_cache:
+            # Download file
             if ii_verbose:
-                print(f"Looking for {jfile}")
-            file_parts = Path(jfile).parts
+                print(f"Forcing file not found! Downloading {jfile}")
+            command = f"wget -P {CACHE_DIR} -c {jfile}"
+            cmds.append(command)
+            dl_files.append(jfile)
+            local_files.append(local_file)
 
-            local_file = os.path.join(CACHE_DIR, file_parts[-1])
-            
-            # decide whether to use local file, download it, or index it remotely
-            if os.path.exists(local_file): 
-                # If the file exists local, get data from this file regardless of ii_cache option           
-                if ii_verbose and ii_cache:
-                    print(f"Found and using local raw forcing file {local_file}")
-                elif ii_verbose and not ii_cache:
-                    print(f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}")      
-                local_files.append(local_file)
-            elif not os.path.exists(local_file) and not ii_cache: 
-                # If file is not found locally, and we don't want to cache it, append to remote file list
-                remote_files.append(jfile)
-            elif not os.path.exists(local_file) and ii_cache: 
-                # Download file
-                if ii_verbose:
-                    print(f"Forcing file not found! Downloading {jfile}")
-                command = f"wget -P {CACHE_DIR} -c {jfile}"
-                cmds.append(command)
-                dl_files.append(jfile)
-                local_files.append(local_file)
+    # Do threaded download if we have any files to download
+    n_files = len(dl_files)
+    if n_files > 0:
+        t0 = time.perf_counter()
+        threads = []
+        semaphore = threading.Semaphore(dl_threads)
+        for i, jcmd in enumerate(cmds):
+            t = threading.Thread(target=threaded_cmd, args=[jcmd, semaphore])
+            t.start()
+            threads.append(t)
 
-        # Do threaded download if we have any files to download
-        n_files = len(dl_files)
-        if n_files > 0:
-            t0 = time.perf_counter()
-            threads = []
-            semaphore = threading.Semaphore(dl_threads)
-            for i, jcmd in enumerate(cmds):
-                t = threading.Thread(target=threaded_cmd, args=[jcmd, semaphore])
-                t.start()
-                threads.append(t)
+        for jt in threads:
+            jt.join()
 
-            for jt in threads:
-                jt.join()
+        print(f"Time to download {n_files} files {time.perf_counter() - t0}")
 
-            print(f"Time to download {n_files} files {time.perf_counter() - t0}")
+    return local_files, remote_files
 
-        return local_files, remote_files    
 
 def main():
     """
-    Primary function to retrieve hydrofabrics data and convert it into files that can be ingested into ngen.
-    Also, the forcing data is retrieved.
+    Primary function to retrieve forcing and hydrofabric data and convert it into files that can be ingested into ngen.
 
     Inputs: <arg1> JSON config file specifying start_date, end_date, and vpu
 
@@ -384,7 +382,7 @@ def main():
     meminput = conf["forcing"]["meminput"]
     urlbaseinput = conf["forcing"]["urlbaseinput"]
     ii_cache = conf["forcing"]["cache"]
-    version   = conf["hydrofab"]["version"]
+    version = conf["hydrofab"]["version"]
     vpu = conf["hydrofab"]["vpu"]
     ii_verbose = conf["verbose"]
     bucket_type = conf["bucket_type"]
@@ -448,11 +446,11 @@ def main():
         print("Generating weights")
         t1 = time.perf_counter()
         generate_weights_file(polygonfile, src, wgt_file, crosswalk_dict_key="id")
-        print(f"Generating the weights took {time.perf_counter() - t1:.2f} s")
+        print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
     else:
         print(
             f"Not creating weight file! Delete this if you want to create a new one: {wgt_file}"
-        )               
+        )
 
     # Get nwm forcing file names
     if len(nwm_file) == 0:
@@ -474,10 +472,12 @@ def main():
         nwm_forcing_files = []
         with open(nwm_file, "r") as f:
             for line in f:
-                nwm_forcing_files.append(line)         
+                nwm_forcing_files.append(line)
 
     # This will look for local raw forcing files and download them if needed
-    local_nwm_files, remote_nwm_files = locate_dl_files_threaded(ii_cache,ii_verbose,nwm_forcing_files,dl_threads)
+    local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
+        ii_cache, ii_verbose, nwm_forcing_files, dl_threads
+    )
 
     var_list = [
         "U2D",
@@ -501,21 +501,16 @@ def main():
         "DSWRF_surface",
     ]
 
-    # Considering possible memory constraints in this operation, 
+    # TODO: Considering possible memory constraints in this operation,
     # let's loop though a certain number of files, write them out, and go back for more
     t0 = time.perf_counter()
-    
-    fd2 = get_forcing_dict_JL(
-        wgt_file,
-        local_nwm_files,
-        remote_nwm_files,
-        var_list,
-        var_list_out,
-        ii_cache
-    )
-    print(f'Time to create forcing dictionary {time.perf_counter() - t0}')
 
-    print(f'Writting data!')
+    fd2 = get_forcing_dict_JL(
+        wgt_file, local_nwm_files, remote_nwm_files, var_list, var_list_out, ii_cache
+    )
+    print(f"Time to create forcing dictionary {time.perf_counter() - t0}")
+
+    print(f"Writing data!")
     # Write CSVs to file
     t0 = time.perf_counter()
     write_int = 100
@@ -548,7 +543,7 @@ def main():
                 end="\r",
             )
 
-    print(f"{file_type} write took {time.perf_counter() - t0:.2f} s\n")
+    print(f"\n{file_type} write took {time.perf_counter() - t0:.2f} s\n")
 
     print(
         f"\n\nDone! Catchment forcing files have been generated for VPU {vpu} in {bucket_type}\n\n"
