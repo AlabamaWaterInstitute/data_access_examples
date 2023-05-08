@@ -2,25 +2,30 @@
     "forcing"  : {
         "start_date"   : "20220822",
         "end_date"     : "20220822",
+        "cache"        : true,
         "nwm_file"     : "",
         "runinput"     : 1,
         "varinput"     : 5,
         "geoinput"     : 1,
         "meminput"     : 0,
-        "urlbaseinput" : 3,
-        "cache"        : false
+        "urlbaseinput" : 3
     },
 
     "hydrofab" : {
-        "version"      : "v1.2",
-        "vpu"          : "03W"
+        "version"     : "v1.2",
+        "vpu"         : "03W"
     },
 
-    "verbose"     : true,
-    "bucket_type" : "local",
-    "bucket_name" : "out_data_CIROH",
-    "file_prefix" : "data/",    
-    "file_type"   : "csv",
-    "dl_threads"  : 10
-    
+    "storage":{
+        "bucket_type" : "local",
+        "bucket_name" : "out_data_CIROH",
+        "file_prefix" : "data/",    
+        "file_type"   : "csv"
+    },
+
+    "run" : {
+        "verbose"  : false,
+        "nthreads" : 1
+    }
+
 }

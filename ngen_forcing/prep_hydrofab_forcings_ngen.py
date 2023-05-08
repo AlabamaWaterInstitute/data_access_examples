@@ -229,24 +229,38 @@ def calc_zonal_stats_weights_new(
     return mean_dict
 
 
-def get_forcing_dict_JL(
+def get_forcing_timelist(
     wgt_file: str,
-    local_filelist: list,
-    remote_filelist: list,
+    filelist: list,
     var_list: list,
-    var_list_out: list,
-    ii_cache: bool,
+    jt = None,
+    out = None,
 ):
+    """
+    General function to read either remote or local nwm forcing files. 
+
+    Inputs:
+    wgt_file: a path to the weights json,
+    filelist: list of filenames (urls for remote, local paths otherwise),
+    var_list: list (list of variable names to read),    
+    jt: the index to place the file. This is used to ensure elements increase in time, regardless of thread number,
+    out:  a list (in time) of forcing data, (THIS IS A THREADING OUTPUT)
+    
+    Outputs:
+    df_by_t : (returned for local files) a list (in time) of forcing data. Note that this list may not be consistent in time
+    OR
+    out : (returned for remote files) a list (in time) of forcing data. 
+        Each thread will write into this list such that time increases, but may not be consistent
+    
+    """
+
     t1 = time.perf_counter()
-    nlocal = len(local_filelist)
-    full_list = local_filelist + remote_filelist
-    df_by_t = []
-    # NOTE this scheme uses the same algorithm for remote and local processing. This may not be desireable
-    if nlocal > 0:
-        eng = "h5netcdf"
-    for _i, _nc_file in enumerate(full_list):
-        if _i == nlocal:
+    df_by_t = []  
+    for _i, _nc_file in enumerate(filelist):
+        if _nc_file[:5] == 'https':
             eng = "rasterio"  # switch engine for remote processing
+        else:
+            eng = "h5netcdf"
         with xr.open_dataset(_nc_file, engine=eng) as _xds:
             shp = _xds["U2D"].shape
             dtp = _xds["U2D"].dtype
@@ -255,46 +269,70 @@ def get_forcing_dict_JL(
                 data_allvars[var_dx, :, :] = np.squeeze(_xds[jvar].values)
             _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, wgt_file)
             df_by_t.append(_df_zonal_stats)
-        print(
-            f"Indexing catchment data progress -> {_i+1} files proccessed out of {len(full_list)}, {(_i+1)/len(full_list)*100:.2f}% {time.perf_counter() - t1:.2f}s elapsed",
-            end="\r",
-        )
 
-    print(f"\nReformating and converting data into dataframe")
+        if jt == None: 
+            print(
+                f"Indexing catchment data progress -> {_i+1} files proccessed out of {len(filelist)}, {(_i+1)/len(filelist)*100:.2f}% {time.perf_counter() - t1:.2f}s elapsed",
+                end="\r",
+            )
+
+    if not jt == None:
+        out[jt] = df_by_t
+
+    return df_by_t
+
+def time2catchment(time_list, var_list_out):
+    """
+    Convert a list of catchment dictionaries into a single dictionary of dataframes for each catchment
+
+    Inputs: 
+    time_list : a list returned by get_forcing_timelist. It is assumed this list is consistent in time.
+    var_list_out : a list of clomun headers for the dataframes
+
+    Outputs:
+    dfs : a dictionary of catchment based dataframes
+
+    """
+
     dfs = {}
-    for jcat in list(df_by_t[0].keys()):
+    for jcat in list(time_list[0].keys()):
         data_catch = []
-        for jt in range(len(df_by_t)):
-            data_catch.append(df_by_t[jt][jcat])
+        for jt in range(len(time_list)):
+            data_catch.append(time_list[jt][jcat])
         dfs[jcat] = pd.DataFrame(data_catch, columns=var_list_out)
-
-    print(
-        f"Indexing data and generating the dataframes (JL) {time.perf_counter() - t1:.2f}s"
-    )
 
     return dfs
 
+def cmd(cmd,out=None):
+    """
+    Execute system commands
 
-def threaded_cmd(cmd, semaphore=None):
+    Inputs
+    cmd : the command to execute
+
     """
-    Execute many system commands using python threading. Semaphore is set outside this function
-    """
-    if not semaphore == None:
-        semaphore.acquire()
     resp = os.system(cmd)
     if resp > 0:
         raise Exception(f"\Threaded command failed! Tried: {cmd}\n")
-    if not semaphore == None:
-        semaphore.release()
 
 
 def locate_dl_files_threaded(
-    ii_cache: bool, ii_verbose: bool, forcing_file_names: list, dl_threads: int
+    ii_cache: bool, ii_verbose: bool, forcing_file_names: list, nthreads: int
 ):
     """
     Look for forcing files locally, if found, will apend to local file list for local processing
     If not found and if we do not wish to cache, append to remote files for remote processing
     If not found and if we do wish to cache, append to local file list for local processing and perform a threaded download
+
+    Inputs:
+    ii_cache : user-defined caching bool
+    ii_verbose : user-defined verbosity bool
+    forcing_file_names : a list of forcing files names
+    nthreads : user-defined maximum number of threads
+
+    Outputs:
+    local_files : list of paths to the local files. Note that even if ii_cache if false, if a file is found locally, it will be used.
+    remote_files : list of urls to the remote files.
     """
 
     local_files = []
@@ -302,10 +340,7 @@ def locate_dl_files_threaded(
     dl_files = []
     cmds = []
     for jfile in forcing_file_names:
-        if ii_verbose:
-            print(f"Looking for {jfile}")
         file_parts = Path(jfile).parts
-
         local_file = os.path.join(CACHE_DIR, file_parts[-1])
 
         # decide whether to use local file, download it, or index it remotely
@@ -330,24 +365,53 @@ def locate_dl_files_threaded(
             dl_files.append(jfile)
             local_files.append(local_file)
 
-    # Do threaded download if we have any files to download
-    n_files = len(dl_files)
-    if n_files > 0:
-        t0 = time.perf_counter()
-        threads = []
-        semaphore = threading.Semaphore(dl_threads)
+    if len(cmds) > 0:
+        args = []
         for i, jcmd in enumerate(cmds):
-            t = threading.Thread(target=threaded_cmd, args=[jcmd, semaphore])
-            t.start()
-            threads.append(t)
-
-        for jt in threads:
-            jt.join()
-
-        print(f"Time to download {n_files} files {time.perf_counter() - t0}")
+            args.append([jcmd])
+        out = threaded_fun(cmd,nthreads,args)
 
     return local_files, remote_files
 
+def threaded_fun(fun,
+                 nthreads : int,
+                 args : list):
+    
+    """
+    Threaded function call
+    """
+    threads = []
+    out = [None for x in range(len(args))]
+    for i in range(len(args)):  
+
+        if i >= nthreads: # Assign new jobs as threads finish
+            k = 0
+            while True:
+                jj = k % nthreads
+                jthread = threads[jj]
+                if jthread.is_alive():
+                    k += 1
+                    time.sleep(0.25)
+                else:                    
+                    t = threading.Thread(target=fun, args= [*args[i], out])
+                    t.start()
+                    threads[jj] = t
+                    break
+        else: # Initial set of threads
+            t = threading.Thread(target=fun, args=[*args[i], out])
+            t.start()
+            threads.append(t)
+
+    # Ensure all threads are finished
+    done = 0
+    while done < len(threads):
+        done = 0
+        for jthread in threads:
+            if not jthread.is_alive():                
+                done += 1
+                time.sleep(0.25)
+
+    return out
 
 def main():
     """
@@ -362,13 +426,14 @@ def main():
 
     t00 = time.perf_counter()
 
+    # Take in user config
     parser = argparse.ArgumentParser()
     parser.add_argument(
         dest="infile", type=str, help="A json containing user inputs to run ngen"
     )
     args = parser.parse_args()
-
-    # Take in user config
+    
+    # Extract configurations
     conf = json.load(open(args.infile))
     start_date = conf["forcing"]["start_date"]
     end_date = conf["forcing"]["end_date"]
@@ -384,25 +449,28 @@ def main():
     ii_cache = conf["forcing"]["cache"]
     version = conf["hydrofab"]["version"]
     vpu = conf["hydrofab"]["vpu"]
-    ii_verbose = conf["verbose"]
-    bucket_type = conf["bucket_type"]
-    bucket_name = conf["bucket_name"]
-    file_prefix = conf["file_prefix"]
-    file_type = conf["file_type"]
-    dl_threads = conf["dl_threads"]
+    bucket_type = conf["storage"]["bucket_type"]
+    bucket_name = conf["storage"]["bucket_name"]
+    file_prefix = conf["storage"]["file_prefix"]
+    file_type = conf["storage"]["file_type"]    
+    ii_verbose = conf["run"]["verbose"]
+    nthreads = conf["run"]["nthreads"]
 
+    print(f'\nWelcome to Preparing Data for NextGen-Based Simulations!\n')
+    if not ii_verbose: print(f'Generating files now! This may take a few moments...')
+
+    dl_time = 0
+    proc_time = 0
+
+    # configuration validation
     file_types = ["csv", "parquet"]
     assert (
         file_type in file_types
     ), f"{file_type} for file_type is not accepted! Accepted: {file_types}"
-
     bucket_types = ["local", "S3"]
     assert (
         bucket_type in bucket_types
     ), f"{bucket_type} for bucket_type is not accepted! Accepted: {bucket_types}"
-
-    # TODO: Subsetting!
-    #
 
     # Set paths and make directories if needed
     top_dir = Path(os.path.dirname(args.infile)).parent
@@ -430,31 +498,36 @@ def main():
         for jfile in os.listdir(CACHE_DIR):
             if jfile.find(f"nextgen_{vpu}.gpkg") >= 0:
                 gpkg = Path(CACHE_DIR, jfile)
-                print(f"Found and using geopackge file {gpkg}")
+                if ii_verbose:print(f"Found and using geopackge file {gpkg}")
         if gpkg == None:
             url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
             command = f"wget -P {CACHE_DIR} -c {url}"
-            threaded_cmd(command, url)
+            t0 = time.perf_counter()
+            cmd(command)
+            dl_time += time.perf_counter() - t0
             gpkg = Path(CACHE_DIR, f"nextgen_{vpu}.gpkg")
 
-        print(f"Opening {gpkg}...")
+        if ii_verbose:print(f"Opening {gpkg}...")
+        t0 = time.perf_counter()
         polygonfile = gpd.read_file(gpkg, layer="divides")
 
         ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
         src = ds["RAINRATE"]
 
-        print("Generating weights")
+        if ii_verbose:print("Generating weights")
         t1 = time.perf_counter()
         generate_weights_file(polygonfile, src, wgt_file, crosswalk_dict_key="id")
-        print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
+        if ii_verbose:print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
+        proc_time +=time.perf_counter() - t0
     else:
-        print(
-            f"Not creating weight file! Delete this if you want to create a new one: {wgt_file}"
-        )
+        if ii_verbose:
+            print(
+                f"Not creating weight file! Delete this if you want to create a new one: {wgt_file}"
+            )
 
     # Get nwm forcing file names
+    t0 = time.perf_counter()
     if len(nwm_file) == 0:
-        print(f"Creating list of file names to locate...")
         fcst_cycle = [0]
 
         nwm_forcing_files = create_file_list(
@@ -468,16 +541,23 @@ def main():
             urlbaseinput,
         )
     else:
-        print(f"Reading list of file names from {nwm_file}...")
         nwm_forcing_files = []
         with open(nwm_file, "r") as f:
             for line in f:
                 nwm_forcing_files.append(line)
+    if ii_verbose: 
+        print(f'Raw file names:')
+        for jfile in nwm_forcing_files:
+            print(f'{jfile}')
+
+    proc_time += time.perf_counter() - t0
 
     # This will look for local raw forcing files and download them if needed
+    t0 = time.perf_counter()
     local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
-        ii_cache, ii_verbose, nwm_forcing_files, dl_threads
+        ii_cache, ii_verbose, nwm_forcing_files, nthreads
     )
+    dl_time += time.perf_counter() - t0
 
     var_list = [
         "U2D",
@@ -500,22 +580,46 @@ def main():
         "SPFH_2maboveground",
         "DSWRF_surface",
     ]
-
-    # TODO: Considering possible memory constraints in this operation,
-    # let's loop though a certain number of files, write them out, and go back for more
+    
     t0 = time.perf_counter()
 
-    fd2 = get_forcing_dict_JL(
-        wgt_file, local_nwm_files, remote_nwm_files, var_list, var_list_out, ii_cache
-    )
-    print(f"Time to create forcing dictionary {time.perf_counter() - t0}")
+    # Index remote files with threads
+    if len(remote_nwm_files) > 0:        
+        args = []
+        for i in range(len(remote_nwm_files)): 
+            if ii_verbose: print(f'Doing a threaded remote data retrieval for file {remote_nwm_files[i]}')
+            args.append([wgt_file, [remote_nwm_files[i]], var_list, i])
+        out = threaded_fun(get_forcing_timelist,nthreads,args)
 
-    print(f"Writing data!")
-    # Write CSVs to file
+    # If we have any local files, index locally serially
+    if len(local_nwm_files) > 0:  
+        time_list = get_forcing_timelist(
+            wgt_file, local_nwm_files, var_list
+        )    
+
+    # Sync in time between remote and local files
+    complete_timelist = []
+    for i, ifile in enumerate(nwm_forcing_files):
+        filename = Path(ifile).parts[-1]
+        for j, jfile in enumerate(local_nwm_files):
+            if jfile.find(filename) >= 0:
+                complete_timelist.append(time_list[j])
+        for j, jfile in enumerate(remote_nwm_files):
+            if jfile.find(filename) >= 0:
+                complete_timelist.append(out[j][0])  
+
+    # Convert time-synced list of catchment dictionaries
+    # to catchment based dataframes
+    dfs = time2catchment(complete_timelist, var_list_out)
+    proc_time = time.perf_counter() - t0
+
+    # Write to file
+    if ii_verbose: print(f"Writing data!")
     t0 = time.perf_counter()
-    write_int = 100
-    for j, jcatch in enumerate(fd2.keys()):
-        df = fd2[jcatch]
+    nfiles = len(dfs)
+    write_int = 1000
+    for j, jcatch in enumerate(dfs.keys()):
+        df = dfs[jcatch]
         splt = jcatch.split("-")
 
         if bucket_type == "local":
@@ -539,17 +643,27 @@ def main():
 
         if (j + 1) % write_int == 0:
             print(
-                f"{j+1} files written out of {len(fd2)}, {(j+1)/len(fd2)*100:.2f}%",
+                f"{j+1} files written out of {len(dfs)}, {(j+1)/len(dfs)*100:.2f}%",
                 end="\r",
             )
+        if j == nfiles-1:
+            print(
+                f"{j+1} files written out of {len(dfs)}, {(j+1)/len(dfs)*100:.2f}%",
+                end="\r",
+            )            
+    write_time = time.perf_counter() - t0
+    total_time = time.perf_counter() - t00
 
-    print(f"\n{file_type} write took {time.perf_counter() - t0:.2f} s\n")
-
-    print(
-        f"\n\nDone! Catchment forcing files have been generated for VPU {vpu} in {bucket_type}\n\n"
-    )
-    print(f"Total run time: {time.perf_counter() - t00:.2f} s")
-
+    print(f'\n\n--------SUMMARY-------')
+    if bucket_type == 'local':
+        msg = f'\nData has been written locally to {bucket_path}'
+    else:
+        msg = f'\nData has been written to S3 bucket {bucket_name} at {file_prefix}'
+    msg += f'\nDownloading data : {dl_time:.2f}s'
+    msg += f'\nProcessing data  : {proc_time:.2f}s'
+    msg += f'\nWriting data     : {write_time:.2f}s'
+    msg += f'\nTotal time       : {total_time:.2f}s\n'
+    print(msg)
 
 if __name__ == "__main__":
     main()
