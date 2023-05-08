@@ -233,31 +233,31 @@ def get_forcing_timelist(
     wgt_file: str,
     filelist: list,
     var_list: list,
-    jt = None,
-    out = None,
+    jt=None,
+    out=None,
 ):
     """
-    General function to read either remote or local nwm forcing files. 
+    General function to read either remote or local nwm forcing files.
 
     Inputs:
     wgt_file: a path to the weights json,
     filelist: list of filenames (urls for remote, local paths otherwise),
-    var_list: list (list of variable names to read),    
+    var_list: list (list of variable names to read),
     jt: the index to place the file. This is used to ensure elements increase in time, regardless of thread number,
     out:  a list (in time) of forcing data, (THIS IS A THREADING OUTPUT)
-    
+
     Outputs:
     df_by_t : (returned for local files) a list (in time) of forcing data. Note that this list may not be consistent in time
     OR
-    out : (returned for remote files) a list (in time) of forcing data. 
+    out : (returned for remote files) a list (in time) of forcing data.
         Each thread will write into this list such that time increases, but may not be consistent
-    
+
     """
 
     t1 = time.perf_counter()
-    df_by_t = []  
+    df_by_t = []
     for _i, _nc_file in enumerate(filelist):
-        if _nc_file[:5] == 'https':
+        if _nc_file[:5] == "https":
             eng = "rasterio"  # switch engine for remote processing
         else:
             eng = "h5netcdf"
@@ -270,7 +270,7 @@ def get_forcing_timelist(
             _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, wgt_file)
             df_by_t.append(_df_zonal_stats)
 
-        if jt == None: 
+        if jt == None:
             print(
                 f"Indexing catchment data progress -> {_i+1} files proccessed out of {len(filelist)}, {(_i+1)/len(filelist)*100:.2f}% {time.perf_counter() - t1:.2f}s elapsed",
                 end="\r",
@@ -281,11 +281,12 @@ def get_forcing_timelist(
 
     return df_by_t
 
+
 def time2catchment(time_list, var_list_out):
     """
     Convert a list of catchment dictionaries into a single dictionary of dataframes for each catchment
 
-    Inputs: 
+    Inputs:
     time_list : a list returned by get_forcing_timelist. It is assumed this list is consistent in time.
     var_list_out : a list of clomun headers for the dataframes
 
@@ -303,7 +304,8 @@ def time2catchment(time_list, var_list_out):
 
     return dfs
 
-def cmd(cmd,out=None):
+
+def cmd(cmd, out=None):
     """
     Execute system commands
 
@@ -369,22 +371,19 @@ def locate_dl_files_threaded(
         args = []
         for i, jcmd in enumerate(cmds):
             args.append([jcmd])
-        out = threaded_fun(cmd,nthreads,args)
+        out = threaded_fun(cmd, nthreads, args)
 
     return local_files, remote_files
 
-def threaded_fun(fun,
-                 nthreads : int,
-                 args : list):
-    
+
+def threaded_fun(fun, nthreads: int, args: list):
     """
     Threaded function call
     """
     threads = []
     out = [None for x in range(len(args))]
-    for i in range(len(args)):  
-
-        if i >= nthreads: # Assign new jobs as threads finish
+    for i in range(len(args)):
+        if i >= nthreads:  # Assign new jobs as threads finish
             k = 0
             while True:
                 jj = k % nthreads
@@ -392,12 +391,12 @@ def threaded_fun(fun,
                 if jthread.is_alive():
                     k += 1
                     time.sleep(0.25)
-                else:                    
-                    t = threading.Thread(target=fun, args= [*args[i], out])
+                else:
+                    t = threading.Thread(target=fun, args=[*args[i], out])
                     t.start()
                     threads[jj] = t
                     break
-        else: # Initial set of threads
+        else:  # Initial set of threads
             t = threading.Thread(target=fun, args=[*args[i], out])
             t.start()
             threads.append(t)
@@ -407,11 +406,12 @@ def threaded_fun(fun,
     while done < len(threads):
         done = 0
         for jthread in threads:
-            if not jthread.is_alive():                
+            if not jthread.is_alive():
                 done += 1
                 time.sleep(0.25)
 
     return out
+
 
 def main():
     """
@@ -432,7 +432,7 @@ def main():
         dest="infile", type=str, help="A json containing user inputs to run ngen"
     )
     args = parser.parse_args()
-    
+
     # Extract configurations
     conf = json.load(open(args.infile))
     start_date = conf["forcing"]["start_date"]
@@ -452,12 +452,13 @@ def main():
     bucket_type = conf["storage"]["bucket_type"]
     bucket_name = conf["storage"]["bucket_name"]
     file_prefix = conf["storage"]["file_prefix"]
-    file_type = conf["storage"]["file_type"]    
+    file_type = conf["storage"]["file_type"]
     ii_verbose = conf["run"]["verbose"]
     nthreads = conf["run"]["nthreads"]
 
-    print(f'\nWelcome to Preparing Data for NextGen-Based Simulations!\n')
-    if not ii_verbose: print(f'Generating files now! This may take a few moments...')
+    print(f"\nWelcome to Preparing Data for NextGen-Based Simulations!\n")
+    if not ii_verbose:
+        print(f"Generating files now! This may take a few moments...")
 
     dl_time = 0
     proc_time = 0
@@ -498,7 +499,8 @@ def main():
         for jfile in os.listdir(CACHE_DIR):
             if jfile.find(f"nextgen_{vpu}.gpkg") >= 0:
                 gpkg = Path(CACHE_DIR, jfile)
-                if ii_verbose:print(f"Found and using geopackge file {gpkg}")
+                if ii_verbose:
+                    print(f"Found and using geopackge file {gpkg}")
         if gpkg == None:
             url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
             command = f"wget -P {CACHE_DIR} -c {url}"
@@ -507,18 +509,21 @@ def main():
             dl_time += time.perf_counter() - t0
             gpkg = Path(CACHE_DIR, f"nextgen_{vpu}.gpkg")
 
-        if ii_verbose:print(f"Opening {gpkg}...")
+        if ii_verbose:
+            print(f"Opening {gpkg}...")
         t0 = time.perf_counter()
         polygonfile = gpd.read_file(gpkg, layer="divides")
 
         ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
         src = ds["RAINRATE"]
 
-        if ii_verbose:print("Generating weights")
+        if ii_verbose:
+            print("Generating weights")
         t1 = time.perf_counter()
         generate_weights_file(polygonfile, src, wgt_file, crosswalk_dict_key="id")
-        if ii_verbose:print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
-        proc_time +=time.perf_counter() - t0
+        if ii_verbose:
+            print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
+        proc_time += time.perf_counter() - t0
     else:
         if ii_verbose:
             print(
@@ -545,10 +550,10 @@ def main():
         with open(nwm_file, "r") as f:
             for line in f:
                 nwm_forcing_files.append(line)
-    if ii_verbose: 
-        print(f'Raw file names:')
+    if ii_verbose:
+        print(f"Raw file names:")
         for jfile in nwm_forcing_files:
-            print(f'{jfile}')
+            print(f"{jfile}")
 
     proc_time += time.perf_counter() - t0
 
@@ -580,22 +585,23 @@ def main():
         "SPFH_2maboveground",
         "DSWRF_surface",
     ]
-    
+
     t0 = time.perf_counter()
 
     # Index remote files with threads
-    if len(remote_nwm_files) > 0:        
+    if len(remote_nwm_files) > 0:
         args = []
-        for i in range(len(remote_nwm_files)): 
-            if ii_verbose: print(f'Doing a threaded remote data retrieval for file {remote_nwm_files[i]}')
+        for i in range(len(remote_nwm_files)):
+            if ii_verbose:
+                print(
+                    f"Doing a threaded remote data retrieval for file {remote_nwm_files[i]}"
+                )
             args.append([wgt_file, [remote_nwm_files[i]], var_list, i])
-        out = threaded_fun(get_forcing_timelist,nthreads,args)
+        out = threaded_fun(get_forcing_timelist, nthreads, args)
 
     # If we have any local files, index locally serially
-    if len(local_nwm_files) > 0:  
-        time_list = get_forcing_timelist(
-            wgt_file, local_nwm_files, var_list
-        )    
+    if len(local_nwm_files) > 0:
+        time_list = get_forcing_timelist(wgt_file, local_nwm_files, var_list)
 
     # Sync in time between remote and local files
     complete_timelist = []
@@ -606,7 +612,7 @@ def main():
                 complete_timelist.append(time_list[j])
         for j, jfile in enumerate(remote_nwm_files):
             if jfile.find(filename) >= 0:
-                complete_timelist.append(out[j][0])  
+                complete_timelist.append(out[j][0])
 
     # Convert time-synced list of catchment dictionaries
     # to catchment based dataframes
@@ -614,7 +620,8 @@ def main():
     proc_time = time.perf_counter() - t0
 
     # Write to file
-    if ii_verbose: print(f"Writing data!")
+    if ii_verbose:
+        print(f"Writing data!")
     t0 = time.perf_counter()
     nfiles = len(dfs)
     write_int = 1000
@@ -646,24 +653,25 @@ def main():
                 f"{j+1} files written out of {len(dfs)}, {(j+1)/len(dfs)*100:.2f}%",
                 end="\r",
             )
-        if j == nfiles-1:
+        if j == nfiles - 1:
             print(
                 f"{j+1} files written out of {len(dfs)}, {(j+1)/len(dfs)*100:.2f}%",
                 end="\r",
-            )            
+            )
     write_time = time.perf_counter() - t0
     total_time = time.perf_counter() - t00
 
-    print(f'\n\n--------SUMMARY-------')
-    if bucket_type == 'local':
-        msg = f'\nData has been written locally to {bucket_path}'
+    print(f"\n\n--------SUMMARY-------")
+    if bucket_type == "local":
+        msg = f"\nData has been written locally to {bucket_path}"
     else:
-        msg = f'\nData has been written to S3 bucket {bucket_name} at {file_prefix}'
-    msg += f'\nDownloading data : {dl_time:.2f}s'
-    msg += f'\nProcessing data  : {proc_time:.2f}s'
-    msg += f'\nWriting data     : {write_time:.2f}s'
-    msg += f'\nTotal time       : {total_time:.2f}s\n'
+        msg = f"\nData has been written to S3 bucket {bucket_name} at {file_prefix}"
+    msg += f"\nDownloading data : {dl_time:.2f}s"
+    msg += f"\nProcessing data  : {proc_time:.2f}s"
+    msg += f"\nWriting data     : {write_time:.2f}s"
+    msg += f"\nTotal time       : {total_time:.2f}s\n"
     print(msg)
+
 
 if __name__ == "__main__":
     main()
