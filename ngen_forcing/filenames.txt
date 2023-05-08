@@ -1,0 +1,3 @@
+https://storage.googleapis.com/national-water-model/nwm.20220822/forcing_medium_range/nwm.t00z.medium_range.forcing.f006.conus.nc
+https://storage.googleapis.com/national-water-model/nwm.20220822/forcing_medium_range/nwm.t00z.medium_range.forcing.f007.conus.nc
+https://storage.googleapis.com/national-water-model/nwm.20220822/forcing_medium_range/nwm.t00z.medium_range.forcing.f008.conus.nc
