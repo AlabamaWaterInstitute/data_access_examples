@@ -24,8 +24,8 @@
     },
 
     "run" : {
-        "verbose"  : false,
-        "nthreads" : 1
+        "verbose"  : true,
+        "nthreads" : 10
     }
 
 }

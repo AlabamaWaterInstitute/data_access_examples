@@ -20,6 +20,8 @@ import time
 import boto3
 from io import BytesIO
 
+
+import concurrent.futures as cf
 import threading
 
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "nwm_filenames")
@@ -233,8 +235,7 @@ def get_forcing_timelist(
     wgt_file: str,
     filelist: list,
     var_list: list,
-    jt=None,
-    out=None,
+    jt=None
 ):
     """
     General function to read either remote or local nwm forcing files.
@@ -244,18 +245,16 @@ def get_forcing_timelist(
     filelist: list of filenames (urls for remote, local paths otherwise),
     var_list: list (list of variable names to read),
     jt: the index to place the file. This is used to ensure elements increase in time, regardless of thread number,
-    out:  a list (in time) of forcing data, (THIS IS A THREADING OUTPUT)
 
     Outputs:
     df_by_t : (returned for local files) a list (in time) of forcing data. Note that this list may not be consistent in time
-    OR
-    out : (returned for remote files) a list (in time) of forcing data.
-        Each thread will write into this list such that time increases, but may not be consistent
+    t : model_output_valid_time for each
 
     """
 
     t1 = time.perf_counter()
     df_by_t = []
+    t = []
     for _i, _nc_file in enumerate(filelist):
         if _nc_file[:5] == "https":
             eng = "rasterio"  # switch engine for remote processing
@@ -269,20 +268,20 @@ def get_forcing_timelist(
                 data_allvars[var_dx, :, :] = np.squeeze(_xds[jvar].values)
             _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, wgt_file)
             df_by_t.append(_df_zonal_stats)
+            time_splt = _xds.attrs["model_output_valid_time"].split("_")
+            t.append(time_splt[0] + " " + time_splt[1])
 
         if jt == None:
             print(
                 f"Indexing catchment data progress -> {_i+1} files proccessed out of {len(filelist)}, {(_i+1)/len(filelist)*100:.2f}% {time.perf_counter() - t1:.2f}s elapsed",
                 end="\r",
             )
+        if _i == len(filelist) -1: print()
 
-    if not jt == None:
-        out[jt] = df_by_t
-
-    return df_by_t
+    return df_by_t, t
 
 
-def time2catchment(time_list, var_list_out):
+def time2catchment(data_list, time_list, var_list_out):
     """
     Convert a list of catchment dictionaries into a single dictionary of dataframes for each catchment
 
@@ -296,16 +295,18 @@ def time2catchment(time_list, var_list_out):
     """
 
     dfs = {}
-    for jcat in list(time_list[0].keys()):
+    for jcat in list(data_list[0].keys()):
         data_catch = []
-        for jt in range(len(time_list)):
-            data_catch.append(time_list[jt][jcat])
+        for jt in range(len(data_list)):
+            data_catch.append(data_list[jt][jcat])
         dfs[jcat] = pd.DataFrame(data_catch, columns=var_list_out)
+        dfs[jcat]["time"] = time_list
+        dfs[jcat] = dfs[jcat][["time"] + var_list_out]
 
     return dfs
 
 
-def cmd(cmd, out=None):
+def cmd(cmd):
     """
     Execute system commands
 
@@ -344,21 +345,37 @@ def locate_dl_files_threaded(
     for jfile in forcing_file_names:
         file_parts = Path(jfile).parts
         local_file = os.path.join(CACHE_DIR, file_parts[-1])
+        ii_dl = False
 
         # decide whether to use local file, download it, or index it remotely
         if os.path.exists(local_file):
-            # If the file exists local, get data from this file regardless of ii_cache option
-            if ii_verbose and ii_cache:
-                print(f"Found and using local raw forcing file {local_file}")
-            elif ii_verbose and not ii_cache:
-                print(
-                    f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}"
-                )
-            local_files.append(local_file)
+
+            # Check to make sure file is not broken
+            try:
+                with xr.open_dataset(local_file, engine="h5netcdf") as _xds:
+                    pass                
+                if ii_cache:
+                    if ii_verbose: print(f"Found and using local raw forcing file {local_file}")
+                else:
+                    if ii_verbose: print(
+                        f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}"
+                    )
+                local_files.append(local_file)
+            except:                 
+                if ii_cache:
+                    if ii_verbose: print(f"{local_file} is broken! Will Download")
+                    ii_dl = True
+                else:
+                    if ii_verbose: print(f"{local_file} is broken! Will index remotely")
+                    remote_files.append(jfile)            
+            
         elif not os.path.exists(local_file) and not ii_cache:
             # If file is not found locally, and we don't want to cache it, append to remote file list
             remote_files.append(jfile)
         elif not os.path.exists(local_file) and ii_cache:
+            ii_dl = True
+
+        if ii_dl:
             # Download file
             if ii_verbose:
                 print(f"Forcing file not found! Downloading {jfile}")
@@ -367,51 +384,13 @@ def locate_dl_files_threaded(
             dl_files.append(jfile)
             local_files.append(local_file)
 
+    # Get files with pool
     if len(cmds) > 0:
-        args = []
-        for i, jcmd in enumerate(cmds):
-            args.append([jcmd])
-        out = threaded_fun(cmd, nthreads, args)
+        pool = cf.ThreadPoolExecutor(max_workers=nthreads)
+        pool.map(cmd, cmds)
+        pool.shutdown()
 
     return local_files, remote_files
-
-
-def threaded_fun(fun, nthreads: int, args: list):
-    """
-    Threaded function call
-    """
-    threads = []
-    out = [None for x in range(len(args))]
-    for i in range(len(args)):
-        if i >= nthreads:  # Assign new jobs as threads finish
-            k = 0
-            while True:
-                jj = k % nthreads
-                jthread = threads[jj]
-                if jthread.is_alive():
-                    k += 1
-                    time.sleep(0.25)
-                else:
-                    t = threading.Thread(target=fun, args=[*args[i], out])
-                    t.start()
-                    threads[jj] = t
-                    break
-        else:  # Initial set of threads
-            t = threading.Thread(target=fun, args=[*args[i], out])
-            t.start()
-            threads.append(t)
-
-    # Ensure all threads are finished
-    done = 0
-    while done < len(threads):
-        done = 0
-        for jthread in threads:
-            if not jthread.is_alive():
-                done += 1
-                time.sleep(0.25)
-
-    return out
-
 
 def main():
     """
@@ -587,41 +566,60 @@ def main():
     ]
 
     t0 = time.perf_counter()
-
     # Index remote files with threads
-    if len(remote_nwm_files) > 0:
-        args = []
-        for i in range(len(remote_nwm_files)):
-            if ii_verbose:
-                print(
-                    f"Doing a threaded remote data retrieval for file {remote_nwm_files[i]}"
-                )
-            args.append([wgt_file, [remote_nwm_files[i]], var_list, i])
-        out = threaded_fun(get_forcing_timelist, nthreads, args)
+    pool = cf.ThreadPoolExecutor(max_workers=nthreads)
+    arg0 = []
+    arg1 = []
+    arg2 = []
+    arg3 = []
+    for i in range(len(remote_nwm_files)):
+        if ii_verbose:
+            print(
+                f"Doing a threaded remote data retrieval for file {remote_nwm_files[i]}"
+            )
+        arg0.append(wgt_file)
+        arg1.append([remote_nwm_files[i]])
+        arg2.append(var_list)
+        arg3.append(i)
+    results = pool.map(get_forcing_timelist, arg0,arg1,arg2,arg3)
+
+    # Get data
+    remote_data_list = []
+    for jres in results:
+        remote_data_list.append(jres)
+    
+    # Build time axis
+    t_ax_remote = []
+    for i in range(len(remote_nwm_files)):
+        t_ax_remote.append(remote_data_list[i][1])
 
     # If we have any local files, index locally serially
     if len(local_nwm_files) > 0:
-        time_list = get_forcing_timelist(wgt_file, local_nwm_files, var_list)
+        data_list, t_ax_local = get_forcing_timelist(
+            wgt_file, local_nwm_files, var_list
+        )
 
     # Sync in time between remote and local files
-    complete_timelist = []
+    complete_data_timelist = []
+    timelist = []
     for i, ifile in enumerate(nwm_forcing_files):
         filename = Path(ifile).parts[-1]
         for j, jfile in enumerate(local_nwm_files):
             if jfile.find(filename) >= 0:
-                complete_timelist.append(time_list[j])
+                complete_data_timelist.append(data_list[j])
+                timelist.append(t_ax_local[j])
         for j, jfile in enumerate(remote_nwm_files):
             if jfile.find(filename) >= 0:
-                complete_timelist.append(out[j][0])
+                complete_data_timelist.append(remote_data_list[j][0][0])
+                timelist.append(t_ax_remote[j])
 
     # Convert time-synced list of catchment dictionaries
     # to catchment based dataframes
-    dfs = time2catchment(complete_timelist, var_list_out)
-    proc_time = time.perf_counter() - t0
+    if ii_verbose: print(f'Reformatting data into dataframes...')
+    dfs = time2catchment(complete_data_timelist, timelist, var_list_out)
+    proc_time += time.perf_counter() - t0
 
     # Write to file
-    if ii_verbose:
-        print(f"Writing data!")
     t0 = time.perf_counter()
     nfiles = len(dfs)
     write_int = 1000
@@ -632,7 +630,7 @@ def main():
         if bucket_type == "local":
             if file_type == "csv":
                 csvname = Path(bucket_path, f"cat{vpu}_{splt[1]}.csv")
-                df.to_csv(csvname)
+                df.to_csv(csvname, index=False)
             if file_type == "parquet":
                 parq_file = Path(bucket_path, f"cat{vpu}_{splt[1]}.parquet")
                 df.to_parquet(parq_file)
@@ -666,9 +664,9 @@ def main():
         msg = f"\nData has been written locally to {bucket_path}"
     else:
         msg = f"\nData has been written to S3 bucket {bucket_name} at {file_prefix}"
-    msg += f"\nDownloading data : {dl_time:.2f}s"
-    msg += f"\nProcessing data  : {proc_time:.2f}s"
-    msg += f"\nWriting data     : {write_time:.2f}s"
+    msg += f"\Check and DL data : {dl_time:.2f}s"
+    msg += f"\nProcess data     : {proc_time:.2f}s"
+    msg += f"\nWrite data       : {write_time:.2f}s"
     msg += f"\nTotal time       : {total_time:.2f}s\n"
     print(msg)
 
