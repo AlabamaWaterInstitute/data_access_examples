@@ -38,10 +38,10 @@ before submitting any pull requests.
 
 <!--- TODO: Consider using or merging this GitHub description with https://github.com/NOAA-OWP/DMOD/blob/master/doc/GIT_USAGE.md --->
 ## The process in summary, i.e., TL;DR
-* Fork the t-route repo on GitHub and clone the new fork  to your development environment
+* Fork the data_access_examples repo on GitHub and clone the new fork  to your development environment
 
 ```
-git clone github.com/<githubusername>/t-route.git
+git clone github.com/<githubusername>/data_access_examples.git
 ```
 
 * Make a new branch and make your changes to the source files in the branch
@@ -57,7 +57,7 @@ git clone github.com/<githubusername>/t-route.git
 * **IMPORTANT** Keep your master branch code up-to-date with the upstream repository using the following commands. As commits from other developers accumulate in the master, merge these into your fork prior to issuing a pull request.
 
 ```
-git remote add upstream https://github.com/NOAA-OWP/t-route.git
+git remote add upstream https://github.com/NOAA-OWP/data_access_examples.git
 git fetch upstream && git pull --rebase upstream master
 
 ```
@@ -76,7 +76,7 @@ of your choice (if the directory does not exist already,
 cd <local/directory/of/your/choice>
 
 # clone your forked repo
-git clone github.com/<githubusername>/t-route.git
+git clone github.com/<githubusername>/data_access_examples.git
  ```  
 ____
 
@@ -102,18 +102,18 @@ we can probably remove this step --->
 It is common practice to name the remote, `origin`
 
 ```
-git remote add origin master https://github.com/<user.name>/t-route.git
+git remote add origin master https://github.com/<user.name>/data_access_examples.git
 ```
 ____
 
-### 4. Add the upstream t-route repo as a second remote
+### 4. Add the upstream data_access_examples repo as a second remote
 
-To get the latest updates from the main t-route codebase, 
+To get the latest updates from the main data_access_examples codebase, 
 we need to add it as a second remote. It is common to 
 name this remote, `upstream` 
 
 ```
-git remote add upstream https://github.com/NOAA-OWP/t-route.git
+git remote add upstream https://github.com/NOAA-OWP/data_access_examples.git
 ```
 
 ____
@@ -127,7 +127,7 @@ you can follow the steps below.
  
       ```
 		cd /path/to/repository
-      ```
+	  ```
 2.	Run git remote to list the existing remotes and see their names and URLs:
 		
 	  ```
