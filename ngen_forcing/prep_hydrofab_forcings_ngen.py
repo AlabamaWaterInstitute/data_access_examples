@@ -19,14 +19,17 @@ from rasterio.features import rasterize
 import time
 import boto3
 from io import BytesIO
-
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.basemap import Basemap
 import concurrent.futures as cf
-import threading
 
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "nwm_filenames")
 sys.path.append(str(pkg_dir))
 from listofnwmfilenames import create_file_list
+
+pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "subsetting")
+sys.path.append(str(pkg_dir))
+from subset import subset_upstream
 
 TEMPLATE_BLOB_NAME = (
     "nwm.20221001/forcing_medium_range/nwm.t00z.medium_range.forcing.f001.conus.nc"
@@ -53,7 +56,7 @@ PARAMETER["standard_parallel_2",18.1],PARAMETER["latitude_of_origin",18.1],UNIT[
 
 # TODO Make CACHE_DIR configurable
 CACHE_DIR = Path(
-    pkg_dir.parent, "data", "raw_data"
+    pkg_dir.parent, "data", "cache"
 )  # Maybe this should have a date attached to the name
 
 NWM_CACHE_DIR = os.path.join(CACHE_DIR, "nwm")
@@ -231,12 +234,7 @@ def calc_zonal_stats_weights_new(
     return mean_dict
 
 
-def get_forcing_timelist(
-    wgt_file: str,
-    filelist: list,
-    var_list: list,
-    jt=None
-):
+def get_forcing_timelist(wgt_file: str, filelist: list, var_list: list):
     """
     General function to read either remote or local nwm forcing files.
 
@@ -270,13 +268,6 @@ def get_forcing_timelist(
             df_by_t.append(_df_zonal_stats)
             time_splt = _xds.attrs["model_output_valid_time"].split("_")
             t.append(time_splt[0] + " " + time_splt[1])
-
-        if jt == None:
-            print(
-                f"Indexing catchment data progress -> {_i+1} files proccessed out of {len(filelist)}, {(_i+1)/len(filelist)*100:.2f}% {time.perf_counter() - t1:.2f}s elapsed",
-                end="\r",
-            )
-        if _i == len(filelist) -1: print()
 
     return df_by_t, t
 
@@ -349,26 +340,29 @@ def locate_dl_files_threaded(
 
         # decide whether to use local file, download it, or index it remotely
         if os.path.exists(local_file):
-
             # Check to make sure file is not broken
             try:
                 with xr.open_dataset(local_file, engine="h5netcdf") as _xds:
-                    pass                
+                    pass
                 if ii_cache:
-                    if ii_verbose: print(f"Found and using local raw forcing file {local_file}")
+                    if ii_verbose:
+                        print(f"Found and using local raw forcing file {local_file}")
                 else:
-                    if ii_verbose: print(
-                        f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}"
-                    )
+                    if ii_verbose:
+                        print(
+                            f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}"
+                        )
                 local_files.append(local_file)
-            except:                 
+            except:
                 if ii_cache:
-                    if ii_verbose: print(f"{local_file} is broken! Will Download")
+                    if ii_verbose:
+                        print(f"{local_file} is broken! Will Download")
                     ii_dl = True
                 else:
-                    if ii_verbose: print(f"{local_file} is broken! Will index remotely")
-                    remote_files.append(jfile)            
-            
+                    if ii_verbose:
+                        print(f"{local_file} is broken! Will index remotely")
+                    remote_files.append(jfile)
+
         elif not os.path.exists(local_file) and not ii_cache:
             # If file is not found locally, and we don't want to cache it, append to remote file list
             remote_files.append(jfile)
@@ -392,6 +386,34 @@ def locate_dl_files_threaded(
 
     return local_files, remote_files
 
+def threaded_data_extract(files,nthreads,ii_verbose,wgt_file,var_list):
+    """
+    Sets up the thread pool for get_forcing_timelist and returns the data and time axis ordered in time
+    
+    """
+    pool = cf.ThreadPoolExecutor(max_workers=nthreads)
+    arg0 = []
+    arg1 = []
+    arg2 = []
+    for i in range(len(files)):
+        arg0.append(wgt_file)
+        arg1.append([files[i]])
+        arg2.append(var_list)
+
+    results = pool.map(get_forcing_timelist, arg0, arg1, arg2)
+
+    data_list = []
+    for jres in results:
+        data_list.append(jres)
+
+    # Build time axis
+    t_ax_local = []
+    for i in range(len(files)):
+        t_ax_local.append(data_list[i][1])   
+
+    return  data_list, t_ax_local
+
+
 def main():
     """
     Primary function to retrieve forcing and hydrofabric data and convert it into files that can be ingested into ngen.
@@ -414,35 +436,44 @@ def main():
 
     # Extract configurations
     conf = json.load(open(args.infile))
-    start_date = conf["forcing"]["start_date"]
-    end_date = conf["forcing"]["end_date"]
-    if "nwm_file" in conf["forcing"]:
-        nwm_file = conf["forcing"]["nwm_file"]
-    else:
-        nwm_file = ""
-    runinput = conf["forcing"]["runinput"]
-    varinput = conf["forcing"]["varinput"]
-    geoinput = conf["forcing"]["geoinput"]
-    meminput = conf["forcing"]["meminput"]
-    urlbaseinput = conf["forcing"]["urlbaseinput"]
+    forcing_type = conf["forcing"]["forcing_type"]
     ii_cache = conf["forcing"]["cache"]
-    version = conf["hydrofab"]["version"]
-    vpu = conf["hydrofab"]["vpu"]
+
+    start_date = conf["forcing"].get("start_date",None)
+    end_date = conf["forcing"].get("end_date",None)
+    runinput = conf["forcing"].get("runinput",None)
+    varinput = conf["forcing"].get("varinput",None)
+    geoinput = conf["forcing"].get("geoinput",None)
+    meminput = conf["forcing"].get("meminput",None)
+    urlbaseinput = conf["forcing"].get("urlbaseinput",None)
+    nwm_file = conf["forcing"].get("nwm_file",None)
+    fcst_cycle = conf["forcing"].get("fcst_cycle",None)
+    lead_time = conf["forcing"].get("lead_time",None)
+
+    version = conf["hydrofab"].get('version','v1.2')
+    vpu = conf["hydrofab"].get("vpu")
+    catchment_subset = conf['hydrofab'].get("catch_subset")
+    geopkg_file = conf["hydrofab"].get("geopkg_file")
+    ii_weights_only = conf['hydrofab'].get('weights_only',False)
+
     bucket_type = conf["storage"]["bucket_type"]
     bucket_name = conf["storage"]["bucket_name"]
     file_prefix = conf["storage"]["file_prefix"]
     file_type = conf["storage"]["file_type"]
-    ii_verbose = conf["run"]["verbose"]
-    nthreads = conf["run"]["nthreads"]
+
+    ii_verbose = conf["run"]["verbose"]    
+    dl_threads = conf["run"]["dl_threads"]
+    proc_threads = conf["run"]["proc_threads"]
 
     print(f"\nWelcome to Preparing Data for NextGen-Based Simulations!\n")
-    if not ii_verbose:
-        print(f"Generating files now! This may take a few moments...")
 
     dl_time = 0
     proc_time = 0
 
     # configuration validation
+    accepted = ['operational_archive','retrospective','from_file']
+    msg = f'{forcing_type} is not a valid input for \"forcing_type\"\nAccepted inputs: {accepted}'
+    assert forcing_type in accepted, msg
     file_types = ["csv", "parquet"]
     assert (
         file_type in file_types
@@ -451,6 +482,7 @@ def main():
     assert (
         bucket_type in bucket_types
     ), f"{bucket_type} for bucket_type is not accepted! Accepted: {bucket_types}"
+    assert vpu is not None or geopkg_file is not None, "Need to input either vpu or geopkg_file"
 
     # Set paths and make directories if needed
     top_dir = Path(os.path.dirname(args.infile)).parent
@@ -462,57 +494,100 @@ def main():
     # Prep output directory
     if bucket_type == "local":
         bucket_path = Path(top_dir, file_prefix, bucket_name)
+        forcing_path = Path(bucket_path, 'forcing')
         if not os.path.exists(bucket_path):
-            os.system(f"mkdir {bucket_path}")
+            os.system(f"mkdir {bucket_path}")            
+            os.system(f"mkdir {forcing_path}")
             if not os.path.exists(bucket_path):
                 raise Exception(f"Creating {bucket_path} failed!")
     elif bucket_type == "S3":
         s3 = boto3.client("s3")
 
     # Generate weight file only if one doesn't exist already
-    # Very time consuming so we don't want to do this if we can avoid it
-    wgt_file = os.path.join(CACHE_DIR, "weights.json")
+    if catchment_subset is not None:
+        wgt_file = os.path.join(CACHE_DIR, f"{catchment_subset}_upstream_weights.json")
+    else:
+        wgt_file = os.path.join(CACHE_DIR, f"{vpu}_weights.json")
     if not os.path.exists(wgt_file):
-        # Search for geopackage that matches the requested VPU, if it exists
-        gpkg = None
-        for jfile in os.listdir(CACHE_DIR):
-            if jfile.find(f"nextgen_{vpu}.gpkg") >= 0:
-                gpkg = Path(CACHE_DIR, jfile)
-                if ii_verbose:
-                    print(f"Found and using geopackge file {gpkg}")
-        if gpkg == None:
-            url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
-            command = f"wget -P {CACHE_DIR} -c {url}"
+
+        # Use geopkg_file if given
+        if geopkg_file is not None:
+            gpkg = Path(Path(os.path.dirname(__file__)).parent,geopkg_file)
+            if not gpkg.exists:
+                raise Exception(f"{gpkg} doesn't exist!!")      
+
+        elif catchment_subset is not None:
+            gpkg = Path(Path(os.path.dirname(__file__)).parent,catchment_subset + '_upstream_subset.gpkg')
+
+        # Default to geopackage that matches the requested VPU
+        else:            
+            gpkg = None
+            for jfile in os.listdir(CACHE_DIR):
+                if jfile.find(f"nextgen_{vpu}.gpkg") >= 0:
+                    gpkg = Path(CACHE_DIR, jfile)
+                    if ii_verbose:
+                        print(f"Found and using geopackge file {gpkg}")
+            if gpkg == None:
+                url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
+                command = f"wget -P {CACHE_DIR} -c {url}"
+                t0 = time.perf_counter()
+                cmd(command)
+                dl_time += time.perf_counter() - t0
+                gpkg = Path(CACHE_DIR, f"nextgen_{vpu}.gpkg")
+
+        if not os.path.exists(gpkg):
+
+            # Generate geopackage through subsetting routine. This will generate ngen geojsons files 
+            if catchment_subset is not None:
+                if ii_verbose: print(f'Subsetting catchment with id {catchment_subset} from {gpkg}')
+                subset_upstream(gpkg,catchment_subset)
+
+                # geojsons will be placed in working directory. Copy them to bucket            
+                if bucket_type == 'local':
+                    out_path = Path(bucket_path,'configs')
+                    if not os.path.exists(out_path): os.system(f'mkdir {out_path}')
+                    os.system(f"mv ./catchments.geojson ./nexus.geojson ./crosswalk.json ./flowpaths.geojson ./flowpath_edge_list.json {out_path}")
+                else:
+                    print(f'UNTESTED!!')
+                    files = ["./catchments.geojson" "./nexus.geojson" "./crosswalk.json" "./flowpaths.geojson" "./flowpath_edge_list.json"]
+                    buf = BytesIO()
+                    for jfile in files:
+                        s3.put_object(
+                        Body=json.dumps(jfile),
+                        Bucket={bucket_name}
+                        )
+
+                # TODO: Create Realization file
+                # TODO: Validate configs                     
+        else:
+            if ii_verbose:
+                print(f"Opening {gpkg}...")
             t0 = time.perf_counter()
-            cmd(command)
-            dl_time += time.perf_counter() - t0
-            gpkg = Path(CACHE_DIR, f"nextgen_{vpu}.gpkg")
+            polygonfile = gpd.read_file(gpkg, layer="divides")
 
-        if ii_verbose:
-            print(f"Opening {gpkg}...")
-        t0 = time.perf_counter()
-        polygonfile = gpd.read_file(gpkg, layer="divides")
+            ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
+            src = ds["RAINRATE"]
 
-        ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
-        src = ds["RAINRATE"]
-
-        if ii_verbose:
-            print("Generating weights")
-        t1 = time.perf_counter()
-        generate_weights_file(polygonfile, src, wgt_file, crosswalk_dict_key="id")
-        if ii_verbose:
-            print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
-        proc_time += time.perf_counter() - t0
+            if ii_verbose:
+                print("Generating weights")
+            t1 = time.perf_counter()
+            generate_weights_file(polygonfile, src, wgt_file, crosswalk_dict_key="id")
+            if ii_verbose:
+                print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
+            proc_time += time.perf_counter() - t0
     else:
         if ii_verbose:
             print(
                 f"Not creating weight file! Delete this if you want to create a new one: {wgt_file}"
             )
 
+    # Exit early if we only want to calculate the weights
+    if ii_weights_only:
+        exit
+
     # Get nwm forcing file names
     t0 = time.perf_counter()
-    if len(nwm_file) == 0:
-        fcst_cycle = [0]
+    if not forcing_type == 'from_file':
 
         nwm_forcing_files = create_file_list(
             runinput,
@@ -523,6 +598,7 @@ def main():
             end_date,
             fcst_cycle,
             urlbaseinput,
+            lead_time
         )
     else:
         nwm_forcing_files = []
@@ -539,7 +615,7 @@ def main():
     # This will look for local raw forcing files and download them if needed
     t0 = time.perf_counter()
     local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
-        ii_cache, ii_verbose, nwm_forcing_files, nthreads
+        ii_cache, ii_verbose, nwm_forcing_files, dl_threads
     )
     dl_time += time.perf_counter() - t0
 
@@ -567,46 +643,29 @@ def main():
 
     t0 = time.perf_counter()
     # Index remote files with threads
-    pool = cf.ThreadPoolExecutor(max_workers=nthreads)
-    arg0 = []
-    arg1 = []
-    arg2 = []
-    arg3 = []
-    for i in range(len(remote_nwm_files)):
+    if len(remote_nwm_files) > 0:
         if ii_verbose:
             print(
-                f"Doing a threaded remote data retrieval for file {remote_nwm_files[i]}"
+                f"Performing threaded remote data extraction with {proc_threads} workers..."
             )
-        arg0.append(wgt_file)
-        arg1.append([remote_nwm_files[i]])
-        arg2.append(var_list)
-        arg3.append(i)
-    results = pool.map(get_forcing_timelist, arg0,arg1,arg2,arg3)
+        remote_data_list, t_ax_remote = threaded_data_extract(remote_nwm_files,proc_threads,ii_verbose,wgt_file,var_list)
 
-    # Get data
-    remote_data_list = []
-    for jres in results:
-        remote_data_list.append(jres)
-    
-    # Build time axis
-    t_ax_remote = []
-    for i in range(len(remote_nwm_files)):
-        t_ax_remote.append(remote_data_list[i][1])
-
-    # If we have any local files, index locally serially
+    # Index local files with threads
     if len(local_nwm_files) > 0:
-        data_list, t_ax_local = get_forcing_timelist(
-            wgt_file, local_nwm_files, var_list
-        )
+        if ii_verbose:
+            print(
+                f"Performing threaded local data extraction with {proc_threads} workers..."
+            )
+        local_data_list, t_ax_local = threaded_data_extract(local_nwm_files,proc_threads,ii_verbose,wgt_file,var_list)      
 
     # Sync in time between remote and local files
     complete_data_timelist = []
     timelist = []
-    for i, ifile in enumerate(nwm_forcing_files):
+    for ifile in nwm_forcing_files:
         filename = Path(ifile).parts[-1]
         for j, jfile in enumerate(local_nwm_files):
             if jfile.find(filename) >= 0:
-                complete_data_timelist.append(data_list[j])
+                complete_data_timelist.append(local_data_list[j][0][0])
                 timelist.append(t_ax_local[j])
         for j, jfile in enumerate(remote_nwm_files):
             if jfile.find(filename) >= 0:
@@ -615,7 +674,8 @@ def main():
 
     # Convert time-synced list of catchment dictionaries
     # to catchment based dataframes
-    if ii_verbose: print(f'Reformatting data into dataframes...')
+    if ii_verbose:
+        print(f"Reformatting data into dataframes...")
     dfs = time2catchment(complete_data_timelist, timelist, var_list_out)
     proc_time += time.perf_counter() - t0
 
@@ -629,10 +689,10 @@ def main():
 
         if bucket_type == "local":
             if file_type == "csv":
-                csvname = Path(bucket_path, f"cat{vpu}_{splt[1]}.csv")
+                csvname = Path(forcing_path, f"cat{vpu}_{splt[1]}.csv")
                 df.to_csv(csvname, index=False)
             if file_type == "parquet":
-                parq_file = Path(bucket_path, f"cat{vpu}_{splt[1]}.parquet")
+                parq_file = Path(forcing_path, f"cat{vpu}_{splt[1]}.parquet")
                 df.to_parquet(parq_file)
         elif bucket_type == "S3":
             buf = BytesIO()
@@ -643,7 +703,7 @@ def main():
                 csvname = f"cat{vpu}_{splt[1]}.csv"
                 df.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{file_prefix}{csvname}"
+            key_name = f"{file_prefix}/forcing/{csvname}"
             s3.put_object(Bucket=bucket_name, Key=key_name, Body=buf.getvalue())
 
         if (j + 1) % write_int == 0:
@@ -664,10 +724,10 @@ def main():
         msg = f"\nData has been written locally to {bucket_path}"
     else:
         msg = f"\nData has been written to S3 bucket {bucket_name} at {file_prefix}"
-    msg += f"\Check and DL data : {dl_time:.2f}s"
-    msg += f"\nProcess data     : {proc_time:.2f}s"
-    msg += f"\nWrite data       : {write_time:.2f}s"
-    msg += f"\nTotal time       : {total_time:.2f}s\n"
+    msg += f"\nCheck and DL data : {dl_time:.2f}s"
+    msg += f"\nProcess data      : {proc_time:.2f}s"
+    msg += f"\nWrite data        : {write_time:.2f}s"
+    msg += f"\nTotal time        : {total_time:.2f}s\n"
     print(msg)
 
 
