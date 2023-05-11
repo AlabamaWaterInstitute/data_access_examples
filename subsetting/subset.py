@@ -95,7 +95,11 @@ def get_upstream_ids(divides, nexus, catchment_id):
     # os._exit(1)
     for cid in catchment_ids:
         graph_nodes.put((catchment_id, 0, True))
-        graph_nodes.put((cat_index.loc[cid].item(), 0, False))
+        try:
+            graph_nodes.put((cat_index.loc[cid].item(), 0, False))
+        except:
+            raise Exception(f'catchment id {cid} is not found in geopackage!')
+
 
     cat_ids = set()
     nex_ids = set()
@@ -150,9 +154,9 @@ def subset_upstream(hydrofabric: Path, ids: "List") -> None:
     # print(nex_ids)
     # print(wb_ids)
     # Useful for looking at the name of each layer and which id index is needed to subset it
-    for layer in layers:
+    # for layer in layers:
         #     df = gpd.read_file(hydrofabric, layer=layer)
-        print(layer)
+        # print(layer)
     #     print(df.head())
 
     flowpaths = (
