@@ -1,17 +1,19 @@
 {
     "forcing"  : {
-        "forcing_type" : "operational_archive",
-        "start_date"   : "20220822",
-        "end_date"     : "20220822",
+        "forcing_type" : "retrospective",
+        "start_date"   : "19790201",
+        "end_date"     : "19790202",
         "cache"        : true,        
         "nwm_file"     : "",
-        "runinput"     : 1,
-        "varinput"     : 5,
+        "runinput"     : 2,
+        "varinput"     : 1,
         "geoinput"     : 1,
-        "meminput"     : 0,
-        "urlbaseinput" : 3,
-        "fcst_cycle"   : [0],
-        "lead_time"    : null
+        "meminput"     : 1,
+        "urlbaseinput" : 6,
+        "fcst_cycle"   : [12,18],
+        "lead_time"    : [1, 2, 240],
+        "data_type"    : [6],
+        "object_type"  : 1
     },
 
     "hydrofab" : {
