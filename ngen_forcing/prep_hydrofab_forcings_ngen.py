@@ -28,10 +28,7 @@ sys.path.append(str(pkg_dir))
 from listofnwmfilenames import create_file_list
 
 retro_file = Path(pkg_dir,'listofnwmfilenamesretro.py')
-ii_retro = False
-if retro_file.exists():
-    ii_retro = True
-    from listofnwmfilenamesretro import create_file_list_retro
+from listofnwmfilenamesretro import create_file_list_retro
 
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "subsetting")
 sys.path.append(str(pkg_dir))
@@ -443,8 +440,6 @@ def main():
     # Extract configurations
     conf = json.load(open(args.infile))
     forcing_type = conf["forcing"]["forcing_type"]
-    if not ii_retro and forcing_type == "retrospective":
-        raise NotImplementedError("Need listofnwmfilenamesretro for this!")
     ii_cache = conf["forcing"]["cache"]
 
     start_date = conf["forcing"].get("start_date",None)
