@@ -27,9 +27,15 @@ pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "nwm_filenames")
 sys.path.append(str(pkg_dir))
 from listofnwmfilenames import create_file_list
 
+retro_file = Path(pkg_dir,'listofnwmfilenamesretro.py')
+ii_retro = False
+if retro_file.exists():
+    ii_retro = True
+    from listofnwmfilenamesretro import create_file_list_retro
+
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "subsetting")
 sys.path.append(str(pkg_dir))
-from subset import subset_upstream
+from subset import subset_upstream, subset_upstream_prerelease
 
 TEMPLATE_BLOB_NAME = (
     "nwm.20221001/forcing_medium_range/nwm.t00z.medium_range.forcing.f001.conus.nc"
@@ -437,6 +443,8 @@ def main():
     # Extract configurations
     conf = json.load(open(args.infile))
     forcing_type = conf["forcing"]["forcing_type"]
+    if not ii_retro and forcing_type == "retrospective":
+        raise NotImplementedError("Need listofnwmfilenamesretro for this!")
     ii_cache = conf["forcing"]["cache"]
 
     start_date = conf["forcing"].get("start_date",None)
@@ -449,6 +457,8 @@ def main():
     nwm_file = conf["forcing"].get("nwm_file",None)
     fcst_cycle = conf["forcing"].get("fcst_cycle",None)
     lead_time = conf["forcing"].get("lead_time",None)
+    data_type = conf["forcing"].get("data_type",None)
+    object_type = conf["forcing"].get("object_type",None)
 
     version = conf["hydrofab"].get('version','v1.2')
     vpu = conf["hydrofab"].get("vpu")
@@ -540,7 +550,13 @@ def main():
             # Generate geopackage through subsetting routine. This will generate ngen geojsons files 
             if catchment_subset is not None:
                 if ii_verbose: print(f'Subsetting catchment with id {catchment_subset} from {gpkg}')
-                subset_upstream(gpkg,catchment_subset)
+                if catchment_subset.find("release"):
+                    try:
+                        subset_upstream_prerelease(gpkg,catchment_subset)
+                    except:
+                        raise NotImplementedError(f"Need Tony's version of subset.py!")
+                else:
+                    subset_upstream(gpkg,catchment_subset)
 
                 # geojsons will be placed in working directory. Copy them to bucket            
                 if bucket_type == 'local':
@@ -589,17 +605,34 @@ def main():
     t0 = time.perf_counter()
     if not forcing_type == 'from_file':
 
-        nwm_forcing_files = create_file_list(
-            runinput,
-            varinput,
-            geoinput,
-            meminput,
-            start_date,
-            end_date,
-            fcst_cycle,
-            urlbaseinput,
-            lead_time
-        )
+        if forcing_type == "operational_archive":
+            nwm_forcing_files = create_file_list(
+                runinput,
+                varinput,
+                geoinput,
+                meminput,
+                start_date,
+                end_date,
+                fcst_cycle,
+                urlbaseinput,
+                lead_time
+            )
+        elif forcing_type == "retrospective":
+            nwm_forcing_files = create_file_list_retro(
+                    runinput,
+                    varinput,
+                    geoinput,
+                    meminput,
+                    start_date + "0000", # Hack
+                    end_date + "0000", # Hack
+                    fcst_cycle,
+                    urlbaseinput,
+                    lead_time,
+                    data_type,
+                    object_type
+                )
+            nwm_forcing_files = nwm_forcing_files[0]
+
     else:
         nwm_forcing_files = []
         with open(nwm_file, "r") as f:

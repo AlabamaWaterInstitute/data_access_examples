@@ -54,9 +54,11 @@ contents:
 | varinput | `int` | <ol><li>channel_rt</li><li>land</li><li>reservoir</li><li>terrain_rt terrain</li><li>forcing</li></ol> |
 | geoinput | `int` | <ol><li>conus</li><li>hawaii</li><li>puertorico</li></ol> |
 | meminput | `int` | <ol><li>mem_1</li><li>mem_2</li><li>mem_3</li><li>mem_4</li><li>mem_5</li><li>mem_6</li><li>mem_7</li></ol> |
-| urlbaseinput | `int` | <ol><li>Empty string: use local files</li><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/prod/: for real-time operational data from NOAA</li><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/post-processed/WMS/: for post-processed data from NOAA's Web Map Service</li><li>https://storage.googleapis.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://storage.cloud.google.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>gs://national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://noaa-nwm-retrospective-2-1-pds.s3.amazonaws.com/model_output/: for retrospective data from AWS S3</li><li>s3://noaa-nwm-retrospective-2-1-pds/model_output/: for retrospective data from AWS S3</li></ol> |
+| urlbaseinput | `int` | <ol><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/prod/: for real-time operational data from NOAA</li><li>https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwm/post-processed/WMS/: for post-processed data from NOAA's Web Map Service</li><li>https://storage.googleapis.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://storage.cloud.google.com/national-water-model/: for input/output data stored on Google Cloud Storage</li><li>gs://national-water-model/: for input/output data stored on Google Cloud Storage</li><li>https://noaa-nwm-retrospective-2-1-pds.s3.amazonaws.com/model_output/: for retrospective data from AWS S3</li><li>s3://noaa-nwm-retrospective-2-1-pds/model_output/: for retrospective data from AWS S3</li></ol> |
 | fcst_cycle | `list` | List of forecast cycles in UTC. If empty, will use all available cycles |
 | lead_time | `list` | List of lead times in hours. If empty, will use all available lead times |
+| data_type | `list` | Only required for retroactive <ol><li>CHRTOUT_DOMAIN1</li><li>GWOUT_DOMAIN1</li><li>LAKEOUT_DOMAIN1</li><li>LDASOUT_DOMAIN1</li><li>RTOUT_DOMAIN1</li><li>LDASIN_DOMAIN1</li></ol> |
+| object_type | `list` or `int` | Only required for retroactive <ol><li>forcing</li><li>model_output</li></ol> |
 
 
 ### hydrofab
