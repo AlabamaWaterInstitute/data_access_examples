@@ -318,3 +318,12 @@ is a useful reference.
 NOAA development projects, please see the
 [documentation associated with the DMOD repo](https://github.com/NOAA-OWP/DMOD/blob/master/doc/GIT_USAGE.md#contributing-tldr)
 
+
+## A couple of useful Git Commands
+- `git stash` takes changes and puts them on a stack. See the stashed changes with `git stash list`
+- `git show -p` shows the changes incorporated in the most recent commit on your active branch. Helpful for figuring out where you are in a complet git operation.
+- `git log` shows where you are in the development tree. `git log --graph --oneline --alldir` adds a few key options to make things more clear.
+- `git rebase --abort` lets you back out of a sticky situation.
+- `git add -p` adds changes one-by-one through your repository.
+- `git rebase -i` allows for a combination of rebasing and cleaning up the commits in your history at the same time. USE WITH CARE. This rewrites your history so it shouldn't be used on any branch where someone else is trying to merge things with you.
+- `git commit --amend` adjusts the last commit to fix a little bug, a commit message typo, etc. This also rewrites history, so it is better not to use it if someone has already started to work from your messy commit.
