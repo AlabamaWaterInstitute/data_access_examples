@@ -16,7 +16,7 @@ git clone github.com/<githubusername>/<repository_name>
 
 * Open GitHub and issue a pull request.
 
-* **IMPORTANT** Keep your code up-to-date with the upstream repository using the following commands. As commits from other developers accumulate in the main, rebase your branch onto those changes prior to issuing a pull request.
+* **IMPORTANT** Keep your code up-to-date with the upstream repository using the following commands. As commits from other developers accumulate in the upstream main branch, rebase your branch onto those changes prior to issuing a pull request.
 
 ```
 git remote add upstream https://github.com/alabamawaterinstitute/data_access_examples.git
