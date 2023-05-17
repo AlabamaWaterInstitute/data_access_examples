@@ -16,6 +16,7 @@ rundict = {
     9: "analysis_assim_long_no_da",
     10: "analysis_assim_no_da",
     11: "short_range_no_da",
+    12: "hi James",
 }
 memdict = {
     1: "mem_1",
