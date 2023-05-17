@@ -643,7 +643,7 @@ def main():
     type_input = [5, 6]
     object_type = 1
     try:
-        file_list, length = create_file_list(
+        file_list, length = create_file_list???(
             runinput,
             varinput,
             geoinput,
