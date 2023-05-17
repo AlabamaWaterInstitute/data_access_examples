@@ -581,7 +581,7 @@ def create_file_list_retro(
 
 def test_create_file_list():
     # Test
-    result, length = create_file_list(
+    result, length = create_file_list_retro(
         2, 1, 1, 1, "197902010000", "197902020800", [12, 18], 6, [1, 2, 240], [5, 6], 1
     )
     assert isinstance(result, list)
@@ -643,7 +643,7 @@ def main():
     type_input = [5, 6]
     object_type = 1
     try:
-        file_list, length = create_file_list(
+        file_list, length = create_file_list_retro(
             runinput,
             varinput,
             geoinput,
