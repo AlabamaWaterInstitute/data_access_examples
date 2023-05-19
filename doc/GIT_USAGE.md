@@ -321,7 +321,7 @@ NOAA development projects, please see the
 
 ## A couple of useful Git Commands
 - `git stash` takes changes and puts them on a stack. See the stashed changes with `git stash list`
-- `git show -p` shows the changes incorporated in the most recent commit on your active branch. Helpful for figuring out where you are in a complet git operation.
+- `git show -p` shows the changes incorporated in the most recent commit on your active branch -- helpful for figuring out where you are in a not-yet-complete edit.
 - `git log` shows where you are in the development tree. `git log --graph --oneline --all` adds a few key options to make things more clear.
 - `git rebase --abort` lets you back out of a sticky situation.
 - `git add -p` adds changes one-by-one through your repository.
