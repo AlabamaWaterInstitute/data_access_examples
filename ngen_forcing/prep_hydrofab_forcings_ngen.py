@@ -543,7 +543,7 @@ def main():
             # Generate geopackage through subsetting routine. This will generate ngen geojsons files 
             if catchment_subset is not None:
                 if ii_verbose: print(f'Subsetting catchment with id {catchment_subset} from {gpkg}')
-                if catchment_subset.find("release"):
+                if catchment_subset.find("release") >= 0:
                     try:
                         subset_upstream_prerelease(gpkg,catchment_subset)
                     except:
