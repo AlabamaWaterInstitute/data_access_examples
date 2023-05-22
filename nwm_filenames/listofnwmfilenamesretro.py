@@ -53,7 +53,6 @@ def selectrun(rundict, runinput):
 
 import requests
 
-
 def generate_url(date, file_type, urlbase_prefix, data_type):
     year_txt = f"{date.strftime('%Y')}"
     date_txt = f"{date.strftime('%Y%m%d%H')}"
@@ -65,11 +64,16 @@ def generate_url(date, file_type, urlbase_prefix, data_type):
         url = f"{urlbase_prefix}{year_txt}/{date_txt}00{retrospective_var_types[data_type - 1]}"
 
     # Check if the link exists
-    response = requests.head(url)
-    if response.status_code == 200:
-        return url
+    validate_url = False
+    timeout = 4
+    if validate_url:
+        response = requests.head(url, timeout=timeout)
+        if response.status_code == 200:
+            return url
+        else:
+            return None
     else:
-        return None
+        return url
 
 
 def makename(
@@ -85,7 +89,6 @@ def makename(
     varsuffix="",
     run_typesuffix="",
     urlbase_prefix="",
-    validate_url=True,  # Optional argument for URL validation
 ):
     datetxt = f"nwm.{date.strftime('%Y%m%d')}"
     foldertxt = f"{run_type}{run_typesuffix}"
@@ -93,15 +96,16 @@ def makename(
 
     url = f"{urlbase_prefix}{datetxt}/{foldertxt}/{filetxt}"
 
+    validate_url = False
+    timeout = 4
     if validate_url:
-        response = requests.head(url)
+        response = requests.head(url, timeout=timeout)
         if response.status_code == 200:
             return url
         else:
             return None
     else:
         return url
-
 
 # setting run_type
 def run_type(runinput, varinput, geoinput, default=""):
@@ -256,18 +260,7 @@ def create_archive_file_list(urlbaseinput):
         pass
 
 
-def operational_archive_file_name_creator(
-    dates,
-    runinput,
-    varinput,
-    geoinput,
-    run_name,
-    meminput,
-    urlbaseinput,
-    fcst_cycle,
-    lead_time,
-    r,
-):
+def operational_archive_file_name_creator(dates, runinput, varinput, geoinput, run_name, meminput, urlbaseinput, fcst_cycle, lead_time, r):
     runsuff = ""
     try:
         geography = selectgeo(geodict, geoinput)
