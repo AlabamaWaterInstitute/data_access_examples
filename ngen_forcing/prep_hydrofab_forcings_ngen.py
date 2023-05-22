@@ -31,8 +31,6 @@ from listofnwmfilenamesretro import create_file_list_retro
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "subsetting")
 sys.path.append(str(pkg_dir))
 from subset import subset_upstream
-if os.path.exists(pkg_dir):
-    from subset import subset_upstream_prerelease
 
 TEMPLATE_BLOB_NAME = (
     "nwm.20221001/forcing_medium_range/nwm.t00z.medium_range.forcing.f001.conus.nc"
