@@ -19,8 +19,6 @@ from rasterio.features import rasterize
 import time
 import boto3
 from io import BytesIO
-import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 import concurrent.futures as cf
 
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "nwm_filenames")
