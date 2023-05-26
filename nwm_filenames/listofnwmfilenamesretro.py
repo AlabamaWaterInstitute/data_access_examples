@@ -53,6 +53,7 @@ def selectrun(rundict, runinput):
 
 import requests
 
+
 def generate_url(date, file_type, urlbase_prefix, data_type):
     year_txt = f"{date.strftime('%Y')}"
     date_txt = f"{date.strftime('%Y%m%d%H')}"
@@ -106,6 +107,7 @@ def makename(
             return None
     else:
         return url
+
 
 # setting run_type
 def run_type(runinput, varinput, geoinput, default=""):
@@ -260,7 +262,18 @@ def create_archive_file_list(urlbaseinput):
         pass
 
 
-def operational_archive_file_name_creator(dates, runinput, varinput, geoinput, run_name, meminput, urlbaseinput, fcst_cycle, lead_time, r):
+def operational_archive_file_name_creator(
+    dates,
+    runinput,
+    varinput,
+    geoinput,
+    run_name,
+    meminput,
+    urlbaseinput,
+    fcst_cycle,
+    lead_time,
+    r,
+):
     runsuff = ""
     try:
         geography = selectgeo(geodict, geoinput)
