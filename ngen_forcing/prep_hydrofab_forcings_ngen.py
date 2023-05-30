@@ -10,7 +10,6 @@ import argparse, os, json, sys
 import gc
 from pathlib import Path
 import geopandas as gpd
-import pandas as pd
 import numpy as np
 import xarray as xr
 from google.cloud import storage
@@ -308,7 +307,7 @@ def cmd(cmd):
     """
     resp = os.system(cmd)
     if resp > 0:
-        raise Exception(f"\Threaded command failed! Tried: {cmd}\n")
+        raise Exception(f"\nThreaded command failed! Tried: {cmd}\n")
 
 
 def locate_dl_files_threaded(
@@ -415,7 +414,7 @@ def threaded_data_extract(files,nthreads,ii_verbose,wgt_file,var_list):
     return  data_list, t_ax_local
 
 
-def main():
+def prep_ngen_data(conf):
     """
     Primary function to retrieve forcing and hydrofabric data and convert it into files that can be ingested into ngen.
 
@@ -428,15 +427,6 @@ def main():
 
     t00 = time.perf_counter()
 
-    # Take in user config
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        dest="infile", type=str, help="A json containing user inputs to run ngen"
-    )
-    args = parser.parse_args()
-
-    # Extract configurations
-    conf = json.load(open(args.infile))
     forcing_type = conf["forcing"]["forcing_type"]
     ii_cache = conf["forcing"]["cache"]
 
@@ -487,15 +477,15 @@ def main():
     ), f"{bucket_type} for bucket_type is not accepted! Accepted: {bucket_types}"
     assert vpu is not None or geopkg_file is not None, "Need to input either vpu or geopkg_file"
 
-    # Set paths and make directories if needed
-    top_dir = Path(os.path.dirname(args.infile)).parent
+    # Set paths and make directories if needed    
     if not os.path.exists(CACHE_DIR):
         os.system(f"mkdir {CACHE_DIR}")
         if not os.path.exists(CACHE_DIR):
             raise Exception(f"Creating {CACHE_DIR} failed!")
 
-    # Prep output directory
+    # Prep output directory    
     if bucket_type == "local":
+        top_dir = Path(os.path.dirname(__file__)).parent
         bucket_path = Path(top_dir, file_prefix, bucket_name)
         forcing_path = Path(bucket_path, 'forcing')
         if not os.path.exists(bucket_path):
@@ -758,4 +748,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Take in user config
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        dest="infile", type=str, help="A json containing user inputs to run ngen"
+    )
+    args = parser.parse_args()
+
+    # Extract configurations
+    conf = json.load(open(args.infile))
+    prep_ngen_data(conf)

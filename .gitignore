@@ -4,3 +4,5 @@ nwm_filenames/__pycache__/
 subsetting/__pycache__/
 ngen_forcing/__pycache__/
 venv/
+tests/__pycache__/
+tests/data/*
