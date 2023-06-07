@@ -25,11 +25,12 @@ def generate_url(date, file_type, urlbase_prefix, retrospective_var_types=None):
     year_txt = date.strftime('%Y')
     date_txt = date.strftime('%Y%m%d%H')
 
-    if file_type == "forcing/":
-        if 1979 <= date.year <= 2006:
-            date_txt += date.strftime('%M')
+    if 1979 <= date.year <= 2006:
+        date_txt += date.strftime('%M')
+
+    if "forcing" in file_type:
         url = f"{urlbase_prefix}{file_type}{year_txt}/{date_txt}.LDASIN_DOMAIN1"
-    elif file_type == "model_output/":
+    elif "model_output" in file_type:
         url = [f"{urlbase_prefix}{file_type}{year_txt}/{date_txt}00{type}" for type in retrospective_var_types]
 
     return url
@@ -60,24 +61,24 @@ def create_file_list_retro(start_date=None, end_date=None, urlbaseinput=None, ob
 
 def check_url(file):
     try:
-        response = requests.head(file, timeout=1)
+        response = session.head(file, timeout=1)
         if response.status_code == 200:
             return file
     except requests.exceptions.RequestException:
         pass
 
 def check_valid_urls(file_list):
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         valid_file_list = list(executor.map(check_url, file_list))
     
     return [file for file in valid_file_list if file is not None]
 
 def main():
-    start_date = "20150201"
-    end_date = "20150202"
+    start_date = "20170201"
+    end_date = "20170202"
     urlbaseinput = 6
-    selected_var_types = [1,2]
-    selected_object_types = [2] # To test both forcing and model_output
+    selected_var_types = [1,3]
+    selected_object_types = [1] # To test both forcing and model_output
     start_time = "0000"
     end_time = "0800"
     
@@ -87,10 +88,11 @@ def main():
         print(f"No files found")
     else:
         print(f"Files: {file_list}\nTotal Files: {len(file_list)}")
-        
+
         valid_file_list = check_valid_urls(file_list)
         
         print(f"Valid Files: {valid_file_list}\nValid files: {len(valid_file_list)}")
 
 if __name__ == "__main__":
+    session = requests.Session()
     main()
