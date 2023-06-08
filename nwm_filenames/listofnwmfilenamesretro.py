@@ -25,10 +25,9 @@ def generate_url(date, file_type, urlbase_prefix, retrospective_var_types=None):
     year_txt = date.strftime('%Y')
     date_txt = date.strftime('%Y%m%d%H')
 
-    if 1979 <= date.year <= 2006:
-        date_txt += date.strftime('%M')
-
-    if "forcing" in file_type:
+    if "forcing" in file_type and date.year < 2007:
+        url = f"{urlbase_prefix}{file_type}{year_txt}/{date_txt}00.LDASIN_DOMAIN1"
+    elif "forcing" in file_type and date.year >= 2007:
         url = f"{urlbase_prefix}{file_type}{year_txt}/{date_txt}.LDASIN_DOMAIN1"
     elif "model_output" in file_type:
         url = [f"{urlbase_prefix}{file_type}{year_txt}/{date_txt}00{type}" for type in retrospective_var_types]
@@ -74,10 +73,10 @@ def check_valid_urls(file_list):
     return [file for file in valid_file_list if file is not None]
 
 def main():
-    start_date = "20170201"
-    end_date = "20170202"
+    start_date = "20070101"
+    end_date = "20070102"
     urlbaseinput = 6
-    selected_var_types = [1,3]
+    selected_var_types = [1,2]
     selected_object_types = [1] # To test both forcing and model_output
     start_time = "0000"
     end_time = "0800"
