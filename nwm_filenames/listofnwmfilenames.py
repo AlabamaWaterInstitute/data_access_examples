@@ -5,7 +5,8 @@ from dateutil import rrule
 from datetime import datetime, timezone
 from itertools import product
 import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/path/to/your/service-account-file.json'
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/path/to/your/service-account-file.json"
 
 rundict = {
     1: "short_range",
@@ -169,7 +170,7 @@ def create_file_list(
     urlbaseinput=None,
     lead_time=None,  # TODO: change this order; placed here to avoid breaking change
 ):
-    """ for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates"""
+    """for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates"""
 
     runsuff = ""
 
@@ -198,7 +199,11 @@ def create_file_list(
         _dtstart = today
         _until = today
 
-    dates = rrule.rrule(rrule.DAILY, dtstart=_dtstart, until=_until,)
+    dates = rrule.rrule(
+        rrule.DAILY,
+        dtstart=_dtstart,
+        until=_until,
+    )
     run_t = run_type(runinput, varinput, geoinput, run_name)
     fhp = fhprefix(runinput)
     vsuff = varsuffix(meminput)
@@ -395,7 +400,10 @@ def create_file_list(
         )
     return r
 
+
 from google.cloud import storage
+
+
 def check_url(file):
     try:
         with requests.get(file, stream=True, timeout=1) as response:
@@ -431,15 +439,15 @@ def main():
     urlbaseinput = 4
 
     file_list = create_file_list(
-            runinput,
-            varinput,
-            geoinput,
-            meminput,
-            start_date,
-            end_date,
-            fcst_cycle,
-            urlbaseinput,
-            lead_time,
+        runinput,
+        varinput,
+        geoinput,
+        meminput,
+        start_date,
+        end_date,
+        fcst_cycle,
+        urlbaseinput,
+        lead_time,
     )
     if len(file_list) == 0:
         print(f"No files found")
@@ -447,6 +455,7 @@ def main():
         print(f"Files: {file_list}\nTotal files: {len(file_list)}")
         valid_file_list = check_valid_urls(file_list)
         print(f"Valid Files: {valid_file_list}\nValid files: {len(valid_file_list)}")
+
 
 if __name__ == "__main__":
     main()
