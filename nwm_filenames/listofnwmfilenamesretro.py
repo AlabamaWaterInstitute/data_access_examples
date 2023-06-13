@@ -1,6 +1,6 @@
-import requests
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor
+
+from filename_helpers import check_valid_urls
 
 retrospective_var_types = {
     1: ".CHRTOUT_DOMAIN1.comp",
@@ -73,22 +73,6 @@ def create_file_list_retro(
     return file_list
 
 
-def check_url(file):
-    try:
-        response = session.head(file, timeout=1)
-        if response.status_code == 200:
-            return file
-    except requests.exceptions.RequestException:
-        pass
-
-
-def check_valid_urls(file_list):
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        valid_file_list = list(executor.map(check_url, file_list))
-
-    return [file for file in valid_file_list if file is not None]
-
-
 def main():
     start_date = "20070101"
     end_date = "20070102"
@@ -117,5 +101,4 @@ def main():
 
 
 if __name__ == "__main__":
-    session = requests.Session()
     main()

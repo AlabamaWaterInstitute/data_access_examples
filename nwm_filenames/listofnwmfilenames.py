@@ -1,12 +1,8 @@
-import multiprocessing
-
-import requests
 from dateutil import rrule
 from datetime import datetime, timezone
 from itertools import product
-import os
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/path/to/your/service-account-file.json"
+from filename_helpers import check_valid_urls
 
 rundict = {
     1: "short_range",
@@ -399,24 +395,6 @@ def create_file_list(
             )
         )
     return r
-
-
-from google.cloud import storage
-
-
-def check_url(file):
-    try:
-        with requests.get(file, stream=True, timeout=1) as response:
-            response.raise_for_status()
-            return file
-    except requests.exceptions.RequestException:
-        pass
-
-
-def check_valid_urls(file_list):
-    with multiprocessing.Pool(multiprocessing.cpu_count()) as p:
-        valid_file_list = p.map(check_url, file_list)
-    return [file for file in valid_file_list if file is not None]
 
 
 def main():
