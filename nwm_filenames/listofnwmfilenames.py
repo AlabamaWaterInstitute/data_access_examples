@@ -414,7 +414,7 @@ def main():
 
     meminput = 5
 
-    urlbaseinput = 4
+    urlbaseinput = 3
 
     file_list = create_file_list(
         runinput,
