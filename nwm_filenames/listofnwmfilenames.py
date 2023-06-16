@@ -2,6 +2,8 @@ from dateutil import rrule
 from datetime import datetime, timezone
 from itertools import product
 
+from filename_helpers import check_valid_urls
+
 rundict = {
     1: "short_range",
     2: "medium_range",
@@ -141,8 +143,8 @@ urlbasedict = {
     3: "https://storage.googleapis.com/national-water-model/",
     4: "https://storage.cloud.google.com/national-water-model/",
     5: "gs://national-water-model/",
-    6: "https://noaa-nwm-retrospective-2-1-pds.s3.amazonaws.com/model_output/",
-    7: "s3://noaa-nwm-retrospective-2-1-pds/model_output/",
+    6: "gcs://national-water-model/",
+    7: "https://noaa-nwm-pds.s3.amazonaws.com/",
 }
 
 
@@ -164,7 +166,7 @@ def create_file_list(
     urlbaseinput=None,
     lead_time=None,  # TODO: change this order; placed here to avoid breaking change
 ):
-    """ for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates"""
+    """for given date,  run, var, fcst_cycle, and geography, print file names for the valid time (the range of fcst_hours) and dates"""
 
     runsuff = ""
 
@@ -193,7 +195,11 @@ def create_file_list(
         _dtstart = today
         _until = today
 
-    dates = rrule.rrule(rrule.DAILY, dtstart=_dtstart, until=_until,)
+    dates = rrule.rrule(
+        rrule.DAILY,
+        dtstart=_dtstart,
+        until=_until,
+    )
     run_t = run_type(runinput, varinput, geoinput, run_name)
     fhp = fhprefix(runinput)
     vsuff = varsuffix(meminput)
@@ -393,36 +399,40 @@ def create_file_list(
 
 def main():
 
-    start_date = "20220822"
-    end_date = "20220824"
+    start_date = "20030402"
+    end_date = "20030420"
 
-    fcst_cycle = [12, 18]
-    lead_time = [1, 2, 240]
+    fcst_cycle = [5, 12]
+    lead_time = [158]
     # fcst_cycle = None  # Retrieves a full day for each day within the range given.
 
     runinput = 2
 
-    varinput = 1
+    varinput = 3
 
     geoinput = 1
 
-    meminput = 1
+    meminput = 5
 
-    urlbaseinput = None
+    urlbaseinput = 3
 
-    print(
-        create_file_list(
-            runinput,
-            varinput,
-            geoinput,
-            meminput,
-            start_date,
-            end_date,
-            fcst_cycle,
-            urlbaseinput,
-            lead_time,
-        )
+    file_list = create_file_list(
+        runinput,
+        varinput,
+        geoinput,
+        meminput,
+        start_date,
+        end_date,
+        fcst_cycle,
+        urlbaseinput,
+        lead_time,
     )
+    if len(file_list) == 0:
+        print(f"No files found")
+    else:
+        print(f"Files: {file_list}\nTotal files: {len(file_list)}")
+        valid_file_list = check_valid_urls(file_list)
+        print(f"Valid Files: {valid_file_list}\nValid files: {len(valid_file_list)}")
 
 
 if __name__ == "__main__":
