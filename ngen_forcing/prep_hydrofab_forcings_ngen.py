@@ -1,7 +1,3 @@
-# TODO NOTE a lot of this code is borrowed from https://github.com/RTIInternational/hydro-evaluation
-# In the future, import this package
-# https://github.com/jameshalgren/data-access-examples/blob/DONOTMERGE_VPU16/ngen_forcing/VERYROUGH_RTI_Forcing_example.ipynb
-
 # !pip install --upgrade google-api-python-client
 # !pip install --upgrade google-cloud-storage
 
@@ -42,60 +38,17 @@ PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_C
 PARAMETER["false_northing",0.0],PARAMETER["central_meridian",-97.0],PARAMETER["standard_parallel_1",30.0],\
 PARAMETER["standard_parallel_2",60.0],PARAMETER["latitude_of_origin",40.0],UNIT["Meter",1.0]]'
 
-HI_NWM_WKT = 'PROJCS["Lambert_Conformal_Conic",GEOGCS["GCS_Sphere",DATUM["D_Sphere",SPHEROID["Sphere",6370000.0,0.0]],\
-PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["false_easting",0.0],\
-PARAMETER["false_northing",0.0],PARAMETER["central_meridian",-157.42],PARAMETER["standard_parallel_1",10.0],\
-PARAMETER["standard_parallel_2",30.0],PARAMETER["latitude_of_origin",20.6],UNIT["Meter",1.0]]'
-
-PR_NWM_WKT = 'PROJCS["Sphere_Lambert_Conformal_Conic",GEOGCS["GCS_Sphere",DATUM["D_Sphere",SPHEROID["Sphere",6370000.0,0.0]],\
-PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["false_easting",0.0],\
-PARAMETER["false_northing",0.0],PARAMETER["central_meridian",-65.91],PARAMETER["standard_parallel_1",18.1],\
-PARAMETER["standard_parallel_2",18.1],PARAMETER["latitude_of_origin",18.1],UNIT["Meter",1.0]]'
-
-# paths
-
-# TODO Make CACHE_DIR configurable
-CACHE_DIR = Path(
-    pkg_dir.parent, "data", "cache"
-)  # Maybe this should have a date attached to the name
-
-NWM_CACHE_DIR = os.path.join(CACHE_DIR, "nwm")
-USGS_CACHE_DIR = os.path.join(CACHE_DIR, "usgs")
-GEO_CACHE_DIR = os.path.join(CACHE_DIR, "geo")
-
-NWM_CACHE_H5 = os.path.join(NWM_CACHE_DIR, "gcp_client.h5")
-
-PARQUET_CACHE_DIR = os.path.join(CACHE_DIR, "parquet")
-MEDIUM_RANGE_FORCING_PARQUET = os.path.join(PARQUET_CACHE_DIR, "forcing_medium_range")
-FORCING_ANALYSIS_ASSIM_PARQUET = os.path.join(
-    PARQUET_CACHE_DIR, "forcing_analysis_assim"
-)
-MEDIUM_RANGE_PARQUET = os.path.join(PARQUET_CACHE_DIR, "medium_range")
-USGS_PARQUET = os.path.join(PARQUET_CACHE_DIR, "usgs")
-
-HUC10_SHP_FILEPATH = os.path.join(GEO_CACHE_DIR, "wbdhu10_conus.shp")
-HUC10_PARQUET_FILEPATH = os.path.join(GEO_CACHE_DIR, "wbdhu10_conus.parquet")
-HUC10_MEDIUM_RANGE_WEIGHTS_FILEPATH = os.path.join(
-    GEO_CACHE_DIR, "wbdhu10_medium_range_weights.pkl"
-)
-
-ROUTE_LINK_FILE = os.path.join(NWM_CACHE_DIR, "RouteLink_CONUS.nc")
-ROUTE_LINK_PARQUET = os.path.join(NWM_CACHE_DIR, "route_link_conus.parquet")
-
-
-def get_cache_dir(create: bool = True):
-    if not os.path.exists(NWM_CACHE_DIR) and create:
-        os.mkdir(NWM_CACHE_DIR)
-    if not os.path.exists(NWM_CACHE_DIR):
+def get_cache_dir(nwm_cache_dir: str,create: bool = True):
+    if not os.path.exists(nwm_cache_dir) and create:
+        os.mkdir(nwm_cache_dir)
+    if not os.path.exists(nwm_cache_dir):
         raise NotADirectoryError
-    return NWM_CACHE_DIR
-
+    return nwm_cache_dir
 
 def make_parent_dir(filepath):
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
-
-def get_dataset(blob_name: str, use_cache: bool = True) -> xr.Dataset:
+def get_dataset(nwm_cache_dir: str, blob_name: str, use_cache: bool = True) -> xr.Dataset:
     """Retrieve a blob from the data service as xarray.Dataset.
     Based largely on OWP HydroTools.
     Parameters
@@ -117,7 +70,7 @@ def get_dataset(blob_name: str, use_cache: bool = True) -> xr.Dataset:
     # kerchunk with a remote path and then asynchronously do a download to cache it
     # for next time. The hypothesis would be that the download speed will not be any slower than
     # just accessing the file remotely.
-    nc_filepath = os.path.join(get_cache_dir(), blob_name)
+    nc_filepath = os.path.join(get_cache_dir(nwm_cache_dir), blob_name)
     make_parent_dir(nc_filepath)
 
     # If the file exists and use_cache = True
@@ -144,9 +97,6 @@ def get_dataset(blob_name: str, use_cache: bool = True) -> xr.Dataset:
             )
         return ds
 
-
-# TODO: Import this instead!
-# Adapted from https://github.com/RTIInternational/hydro-evaluation/blob/dev-denno-4-1/src/evaluation/loading/generate_weights.py
 def generate_weights_file(
     gdf: gpd.GeoDataFrame,
     src: xr.DataArray,
@@ -158,9 +108,6 @@ def generate_weights_file(
     gdf_proj = gdf.to_crs(CONUS_NWM_WKT)
 
     crosswalk_dict = {}
-    # This is a probably a really poor performing way to do this
-    # TODO: Consider vectorizing -- would require digging into the
-    # other end of these where we unpack the weights...
     i = 0
     for index, row in gdf_proj.iterrows():
         geom_rasterize = rasterize(
@@ -258,6 +205,7 @@ def get_forcing_timelist(wgt_file: str, filelist: list, var_list: list):
             eng = "rasterio"  # switch engine for remote processing
         else:
             eng = "h5netcdf"
+
         with xr.open_dataset(_nc_file, engine=eng) as _xds:
             shp = _xds["U2D"].shape
             dtp = _xds["U2D"].dtype
@@ -311,7 +259,7 @@ def cmd(cmd):
 
 
 def locate_dl_files_threaded(
-    ii_cache: bool, ii_verbose: bool, forcing_file_names: list, nthreads: int
+    cache_dir: str, ii_cache: bool, ii_verbose: bool, forcing_file_names: list, nthreads: int
 ):
     """
     Look for forcing files locally, if found, will apend to local file list for local processing
@@ -335,7 +283,7 @@ def locate_dl_files_threaded(
     cmds = []
     for jfile in forcing_file_names:
         file_parts = Path(jfile).parts
-        local_file = os.path.join(CACHE_DIR, file_parts[-1])
+        local_file = os.path.join(cache_dir, file_parts[-1])
         ii_dl = False
 
         # decide whether to use local file, download it, or index it remotely
@@ -373,7 +321,7 @@ def locate_dl_files_threaded(
             # Download file
             if ii_verbose:
                 print(f"Forcing file not found! Downloading {jfile}")
-            command = f"wget -P {CACHE_DIR} -c {jfile}"
+            command = f"wget -P {cache_dir} -c {jfile}"
             cmds.append(command)
             dl_files.append(jfile)
             local_files.append(local_file)
@@ -449,10 +397,12 @@ def prep_ngen_data(conf):
     geopkg_file = conf["hydrofab"].get("geopkg_file")
     ii_weights_only = conf['hydrofab'].get('weights_only',False)
 
-    bucket_type = conf["storage"]["bucket_type"]
-    bucket_name = conf["storage"]["bucket_name"]
-    file_prefix = conf["storage"]["file_prefix"]
-    file_type = conf["storage"]["file_type"]
+    storage_type = conf["storage"]["type"]
+    output_bucket = conf["storage"]["output_bucket"]
+    output_bucket_path = conf["storage"]["output_bucket_path"]    
+    cache_bucket = conf["storage"]["cache_bucket"]
+    cache_bucket_path = conf["storage"]["cache_bucket_path"]
+    output_file_type = conf["storage"]["output_file_type"]
 
     ii_verbose = conf["run"]["verbose"]    
     dl_threads = conf["run"]["dl_threads"]
@@ -469,44 +419,58 @@ def prep_ngen_data(conf):
     assert forcing_type in accepted, msg
     file_types = ["csv", "parquet"]
     assert (
-        file_type in file_types
-    ), f"{file_type} for file_type is not accepted! Accepted: {file_types}"
+        output_file_type in file_types
+    ), f"{output_file_type} for output_file_type is not accepted! Accepted: {file_types}"
     bucket_types = ["local", "S3"]
     assert (
-        bucket_type in bucket_types
-    ), f"{bucket_type} for bucket_type is not accepted! Accepted: {bucket_types}"
+        type in bucket_types
+    ), f"{storage_type} for storage_type is not accepted! Accepted: {bucket_types}"
     assert vpu is not None or geopkg_file is not None, "Need to input either vpu or geopkg_file"
+        
+    if storage_type == "local":
 
-    # Set paths and make directories if needed    
-    if not os.path.exists(CACHE_DIR):
-        os.system(f"mkdir {CACHE_DIR}")
-        if not os.path.exists(CACHE_DIR):
-            raise Exception(f"Creating {CACHE_DIR} failed!")
-
-    # Prep output directory    
-    if bucket_type == "local":
+        # Prep output directory
         top_dir = Path(os.path.dirname(__file__)).parent
-        bucket_path = Path(top_dir, file_prefix, bucket_name)
-        forcing_path = Path(bucket_path, 'forcing')
+        bucket_path = Path(top_dir, output_bucket_path, output_bucket)
+        forcing_path = Path(bucket_path, 'forcing')        
         if not os.path.exists(bucket_path):
             os.system(f"mkdir {bucket_path}")            
             os.system(f"mkdir {forcing_path}")
             if not os.path.exists(bucket_path):
                 raise Exception(f"Creating {bucket_path} failed!")
-    elif bucket_type == "S3":
+             
+        # Prep cache directory
+        cache_dir = Path(Path(os.path.dirname(__file__)).parent,cache_bucket_path)
+        nwm_cache_dir = os.path.join(cache_dir, "nwm")
+        if not os.path.exists(cache_dir):
+            os.system(f"mkdir {cache_dir}")
+            if not os.path.exists(cache_dir):
+                raise Exception(f"Creating {cache_dir} failed!")         
+
+    elif storage_type == "S3":
         s3 = boto3.client("s3")
+
+        # Prep cache directory
+        # TODO: test that the bucket exists
+        # cache_dir = Path(Path(os.path.dirname(__file__)).parent,cache_bucket_path)
+        # nwm_cache_dir = os.path.join(cache_dir, "nwm")         
+        try:
+            bucket = s3.create_bucket(Bucket=cache_bucket)
+            # nwm bucket should be created when we store the nwm file
+        except:
+            raise Exception(f'Provided bucket {cache_bucket} does not exist and cannot be created!')
 
     # Generate weight file only if one doesn't exist already
     if catchment_subset is not None:
-        wgt_file = os.path.join(CACHE_DIR, f"{catchment_subset}_upstream_weights.json")
+        wgt_file = os.path.join(cache_dir, f"{catchment_subset}_upstream_weights.json")
     else:
-        wgt_file = os.path.join(CACHE_DIR, f"{vpu}_weights.json")
+        wgt_file = os.path.join(cache_dir, f"{vpu}_weights.json")
     if not os.path.exists(wgt_file):
 
         # Use geopkg_file if given
         if geopkg_file is not None:
             gpkg = Path(Path(os.path.dirname(__file__)).parent,geopkg_file)
-            if not gpkg.exists:
+            if not gpkg.exists():
                 raise Exception(f"{gpkg} doesn't exist!!")      
 
         elif catchment_subset is not None:
@@ -515,18 +479,18 @@ def prep_ngen_data(conf):
         # Default to geopackage that matches the requested VPU
         else:            
             gpkg = None
-            for jfile in os.listdir(CACHE_DIR):
+            for jfile in os.listdir(cache_dir):
                 if jfile.find(f"nextgen_{vpu}.gpkg") >= 0:
-                    gpkg = Path(CACHE_DIR, jfile)
+                    gpkg = Path(cache_dir, jfile)
                     if ii_verbose:
                         print(f"Found and using geopackge file {gpkg}")
             if gpkg == None:
                 url = f"https://nextgen-hydrofabric.s3.amazonaws.com/{version}/nextgen_{vpu}.gpkg"
-                command = f"wget -P {CACHE_DIR} -c {url}"
+                command = f"wget -P {cache_dir} -c {url}"
                 t0 = time.perf_counter()
                 cmd(command)
                 dl_time += time.perf_counter() - t0
-                gpkg = Path(CACHE_DIR, f"nextgen_{vpu}.gpkg")
+                gpkg = Path(cache_dir, f"nextgen_{vpu}.gpkg")
 
         if not os.path.exists(gpkg):
 
@@ -542,19 +506,25 @@ def prep_ngen_data(conf):
                     subset_upstream(gpkg,catchment_subset)
 
                 # geojsons will be placed in working directory. Copy them to bucket            
-                if bucket_type == 'local':
+                if storage_type == 'local':
                     out_path = Path(bucket_path,'configs')
                     if not os.path.exists(out_path): os.system(f'mkdir {out_path}')
                     os.system(f"mv ./catchments.geojson ./nexus.geojson ./crosswalk.json ./flowpaths.geojson ./flowpath_edge_list.json {out_path}")
                 else:
-                    print(f'UNTESTED!!')
-                    files = ["./catchments.geojson" "./nexus.geojson" "./crosswalk.json" "./flowpaths.geojson" "./flowpath_edge_list.json"]
-                    buf = BytesIO()
-                    for jfile in files:
-                        s3.put_object(
-                        Body=json.dumps(jfile),
-                        Bucket={bucket_name}
-                        )
+                    # Just don't worry about all the output files from subsetting for now
+                    os.system(f"rm ./catchments.geojson ./nexus.geojson ./crosswalk.json ./flowpaths.geojson ./flowpath_edge_list.json")
+                    # print(f'UNTESTED!!')
+                    # files = ["./catchments.geojson",
+                    #         "./nexus.geojson",
+                    #         "./crosswalk.json",
+                    #         "./flowpaths.geojson",
+                    #         "./flowpath_edge_list.json"]
+                    # buf = BytesIO()
+                    # for jfile in files:
+                    #     s3.put_object(
+                    #     Body=json.dumps(jfile),
+                    #     Bucket={output_bucket}
+                    #     )
 
                 # TODO: Create Realization file
                 # TODO: Validate configs                     
@@ -564,7 +534,7 @@ def prep_ngen_data(conf):
             t0 = time.perf_counter()
             polygonfile = gpd.read_file(gpkg, layer="divides")
 
-            ds = get_dataset(TEMPLATE_BLOB_NAME, use_cache=True)
+            ds = get_dataset(nwm_cache_dir,TEMPLATE_BLOB_NAME, use_cache=True)
             src = ds["RAINRATE"]
 
             if ii_verbose:
@@ -631,7 +601,7 @@ def prep_ngen_data(conf):
     # This will look for local raw forcing files and download them if needed
     t0 = time.perf_counter()
     local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
-        ii_cache, ii_verbose, nwm_forcing_files, dl_threads
+        cache_dir, ii_cache, ii_verbose, nwm_forcing_files, dl_threads
     )
     dl_time += time.perf_counter() - t0
 
@@ -703,24 +673,24 @@ def prep_ngen_data(conf):
         df = dfs[jcatch]
         splt = jcatch.split("-")
 
-        if bucket_type == "local":
-            if file_type == "csv":
+        if storage_type == "local":
+            if output_file_type == "csv":
                 csvname = Path(forcing_path, f"cat{vpu}_{splt[1]}.csv")
                 df.to_csv(csvname, index=False)
-            if file_type == "parquet":
+            if output_file_type == "parquet":
                 parq_file = Path(forcing_path, f"cat{vpu}_{splt[1]}.parquet")
                 df.to_parquet(parq_file)
-        elif bucket_type == "S3":
+        elif storage_type == "S3":
             buf = BytesIO()
-            if file_type == "parquet":
+            if output_file_type == "parquet":
                 parq_file = f"cat{vpu}_{splt[1]}.parquet"
                 df.to_parquet(buf)
-            elif file_type == "csv":
+            elif output_file_type == "csv":
                 csvname = f"cat{vpu}_{splt[1]}.csv"
                 df.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{file_prefix}/forcing/{csvname}"
-            s3.put_object(Bucket=bucket_name, Key=key_name, Body=buf.getvalue())
+            key_name = f"{output_bucket_path}/forcing/{csvname}"
+            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
 
         if (j + 1) % write_int == 0:
             print(
@@ -736,10 +706,10 @@ def prep_ngen_data(conf):
     total_time = time.perf_counter() - t00
 
     print(f"\n\n--------SUMMARY-------")
-    if bucket_type == "local":
+    if storage_type == "local":
         msg = f"\nData has been written locally to {bucket_path}"
     else:
-        msg = f"\nData has been written to S3 bucket {bucket_name} at {file_prefix}"
+        msg = f"\nData has been written to S3 bucket {output_bucket} at {output_bucket_path}"
     msg += f"\nCheck and DL data : {dl_time:.2f}s"
     msg += f"\nProcess data      : {proc_time:.2f}s"
     msg += f"\nWrite data        : {write_time:.2f}s"
