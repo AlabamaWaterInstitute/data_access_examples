@@ -3,7 +3,6 @@
 
 import pandas as pd
 import argparse, os, json, sys
-import gc
 from pathlib import Path
 import geopandas as gpd
 import numpy as np
@@ -152,17 +151,22 @@ def get_blob(blob_name: str, bucket: str = NWM_BUCKET) -> bytes:
     bucket = client.bucket(bucket)
     return bucket.blob(blob_name).download_as_bytes(timeout=120)
 
+def get_weights_dict(weights_file):
+    # Open weights dict from pickle
+    # The if statement is here to decide how to read the weight file based on local or bucket
+    if type(weights_file) is dict:
+        crosswalk_dict = json.loads(weights_file["Body"].read().decode())
+    else:
+        with open(weights_file, "r") as f:
+            crosswalk_dict = json.load(f)
+
+    return crosswalk_dict
 
 def calc_zonal_stats_weights_new(
     src: np.ndarray,
-    weights_filepath: str,
+    crosswalk_dict: dict,
 ) -> pd.DataFrame:
     """Calculates zonal stats"""
-
-    # Open weights dict from pickle
-    # This could probably be done once and passed as a reference.
-    with open(weights_filepath, "r") as f:
-        crosswalk_dict = json.load(f)
 
     nvar = src.shape[0]
     mean_dict = {}
@@ -173,15 +177,10 @@ def calc_zonal_stats_weights_new(
     for key, value in crosswalk_dict.items():
         mean_dict[key] = np.nanmean(src[:, value[0], value[1]], axis=1)
 
-    # This should not be needed, but without memory usage grows
-    del crosswalk_dict
-    del f
-    gc.collect()
-
     return mean_dict
 
 
-def get_forcing_timelist(wgt_file: str, filelist: list, var_list: list):
+def get_forcing_timelist(crosswalk_dict: dict, filelist: list, var_list: list):
     """
     General function to read either remote or local nwm forcing files.
 
@@ -197,7 +196,6 @@ def get_forcing_timelist(wgt_file: str, filelist: list, var_list: list):
 
     """
 
-    t1 = time.perf_counter()
     df_by_t = []
     t = []
     for _i, _nc_file in enumerate(filelist):
@@ -212,7 +210,7 @@ def get_forcing_timelist(wgt_file: str, filelist: list, var_list: list):
             data_allvars = np.zeros(shape=(len(var_list), shp[1], shp[2]), dtype=dtp)
             for var_dx, jvar in enumerate(var_list):
                 data_allvars[var_dx, :, :] = np.squeeze(_xds[jvar].values)
-            _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, wgt_file)
+            _df_zonal_stats = calc_zonal_stats_weights_new(data_allvars, crosswalk_dict)
             df_by_t.append(_df_zonal_stats)
             time_splt = _xds.attrs["model_output_valid_time"].split("_")
             t.append(time_splt[0] + " " + time_splt[1])
@@ -334,7 +332,7 @@ def locate_dl_files_threaded(
 
     return local_files, remote_files
 
-def threaded_data_extract(files,nthreads,ii_verbose,wgt_file,var_list):
+def threaded_data_extract(files,nthreads,ii_verbose,crosswalk_dict,var_list):
     """
     Sets up the thread pool for get_forcing_timelist and returns the data and time axis ordered in time
     
@@ -344,7 +342,7 @@ def threaded_data_extract(files,nthreads,ii_verbose,wgt_file,var_list):
     arg1 = []
     arg2 = []
     for i in range(len(files)):
-        arg0.append(wgt_file)
+        arg0.append(crosswalk_dict)
         arg1.append([files[i]])
         arg2.append(var_list)
 
@@ -397,7 +395,7 @@ def prep_ngen_data(conf):
     geopkg_file = conf["hydrofab"].get("geopkg_file")
     ii_weights_only = conf['hydrofab'].get('weights_only',False)
 
-    storage_type = conf["storage"]["type"]
+    storage_type = conf["storage"]["storage_type"]
     output_bucket = conf["storage"]["output_bucket"]
     output_bucket_path = conf["storage"]["output_bucket_path"]    
     cache_bucket = conf["storage"]["cache_bucket"]
@@ -423,10 +421,15 @@ def prep_ngen_data(conf):
     ), f"{output_file_type} for output_file_type is not accepted! Accepted: {file_types}"
     bucket_types = ["local", "S3"]
     assert (
-        type in bucket_types
+        storage_type in bucket_types
     ), f"{storage_type} for storage_type is not accepted! Accepted: {bucket_types}"
     assert vpu is not None or geopkg_file is not None, "Need to input either vpu or geopkg_file"
         
+    if catchment_subset is not None:
+        vpu_or_subset = catchment_subset + "_upstream"
+    else:
+        vpu_or_subset = vpu
+
     if storage_type == "local":
 
         # Prep output directory
@@ -445,27 +448,29 @@ def prep_ngen_data(conf):
         if not os.path.exists(cache_dir):
             os.system(f"mkdir {cache_dir}")
             if not os.path.exists(cache_dir):
-                raise Exception(f"Creating {cache_dir} failed!")         
+                raise Exception(f"Creating {cache_dir} failed!")   
+
+        wgt_file = os.path.join(cache_dir, f"{vpu_or_subset}_weights.json")
+        ii_wgt_file = os.path.exists(wgt_file)
 
     elif storage_type == "S3":
-        s3 = boto3.client("s3")
-
-        # Prep cache directory
-        # TODO: test that the bucket exists
-        # cache_dir = Path(Path(os.path.dirname(__file__)).parent,cache_bucket_path)
-        # nwm_cache_dir = os.path.join(cache_dir, "nwm")         
+        with open(Path(Path(os.path.dirname(__file__)),"credentials")) as f:
+            creds = f.readlines()
+        s3 = boto3.client("s3",
+                        aws_access_key_id=creds[1].split(' = ')[1][:-1],
+                        aws_secret_access_key=creds[2].split(' = ')[1][:-1]
+                        )        
         try:
-            bucket = s3.create_bucket(Bucket=cache_bucket)
-            # nwm bucket should be created when we store the nwm file
-        except:
-            raise Exception(f'Provided bucket {cache_bucket} does not exist and cannot be created!')
+            wgt_file = s3.get_object(Bucket=cache_bucket, Key=f"{vpu_or_subset}_weights.json")
+            ii_wgt_file = True
+        except :
+            ii_wgt_file = False
+            raise NotImplementedError(f'Need to implement weight file creation in bucket')
 
     # Generate weight file only if one doesn't exist already
-    if catchment_subset is not None:
-        wgt_file = os.path.join(cache_dir, f"{catchment_subset}_upstream_weights.json")
-    else:
-        wgt_file = os.path.join(cache_dir, f"{vpu}_weights.json")
-    if not os.path.exists(wgt_file):
+    # TODO: This will break hard if looking for the weight file in S3, 
+    # this code block assumes the weight files are local
+    if not ii_wgt_file:
 
         # Use geopkg_file if given
         if geopkg_file is not None:
@@ -545,6 +550,7 @@ def prep_ngen_data(conf):
                 print(f"\nGenerating the weights took {time.perf_counter() - t1:.2f} s")
             proc_time += time.perf_counter() - t0
     else:
+        crosswalk_dict = get_weights_dict(wgt_file)
         if ii_verbose:
             print(
                 f"Not creating weight file! Delete this if you want to create a new one: {wgt_file}"
@@ -599,11 +605,15 @@ def prep_ngen_data(conf):
     proc_time += time.perf_counter() - t0
 
     # This will look for local raw forcing files and download them if needed
-    t0 = time.perf_counter()
-    local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
-        cache_dir, ii_cache, ii_verbose, nwm_forcing_files, dl_threads
-    )
-    dl_time += time.perf_counter() - t0
+    if storage_type == 'local':
+        t0 = time.perf_counter()
+        local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
+            cache_dir, ii_cache, ii_verbose, nwm_forcing_files, dl_threads
+        )
+        dl_time += time.perf_counter() - t0
+    else:
+        remote_nwm_files = nwm_forcing_files
+        local_nwm_files = []
 
     var_list = [
         "U2D",
@@ -634,7 +644,7 @@ def prep_ngen_data(conf):
             print(
                 f"Performing threaded remote data extraction with {proc_threads} workers..."
             )
-        remote_data_list, t_ax_remote = threaded_data_extract(remote_nwm_files,proc_threads,ii_verbose,wgt_file,var_list)
+        remote_data_list, t_ax_remote = threaded_data_extract(remote_nwm_files,proc_threads,ii_verbose,crosswalk_dict,var_list)
 
     # Index local files with threads
     if len(local_nwm_files) > 0:
@@ -642,7 +652,7 @@ def prep_ngen_data(conf):
             print(
                 f"Performing threaded local data extraction with {proc_threads} workers..."
             )
-        local_data_list, t_ax_local = threaded_data_extract(local_nwm_files,proc_threads,ii_verbose,wgt_file,var_list)      
+        local_data_list, t_ax_local = threaded_data_extract(local_nwm_files,proc_threads,ii_verbose,crosswalk_dict,var_list)      
 
     # Sync in time between remote and local files
     complete_data_timelist = []
@@ -670,6 +680,7 @@ def prep_ngen_data(conf):
     nfiles = len(dfs)
     write_int = 1000
     for j, jcatch in enumerate(dfs.keys()):
+        if j > 10: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.
         df = dfs[jcatch]
         splt = jcatch.split("-")
 
