@@ -3,6 +3,8 @@
 
 import pandas as pd
 import argparse, os, json, sys
+import fsspec
+import s3fs
 from pathlib import Path
 import geopandas as gpd
 import numpy as np
@@ -12,8 +14,11 @@ from rasterio.io import MemoryFile
 from rasterio.features import rasterize
 import time
 import boto3
-from io import BytesIO
+from io import BytesIO, TextIOWrapper
 import concurrent.futures as cf
+import git
+import gzip
+from datetime import datetime
 
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "nwm_filenames")
 sys.path.append(str(pkg_dir))
@@ -180,7 +185,7 @@ def calc_zonal_stats_weights_new(
     return mean_dict
 
 
-def get_forcing_timelist(crosswalk_dict: dict, filelist: list, var_list: list):
+def get_forcing_timelist(crosswalk_dict: dict, filelist: list, var_list: list, cache_dir=None, s3=None):
     """
     General function to read either remote or local nwm forcing files.
 
@@ -195,6 +200,7 @@ def get_forcing_timelist(crosswalk_dict: dict, filelist: list, var_list: list):
     t : model_output_valid_time for each
 
     """
+    fs = fsspec.filesystem('s3', anon=True)
 
     df_by_t = []
     t = []
@@ -202,9 +208,16 @@ def get_forcing_timelist(crosswalk_dict: dict, filelist: list, var_list: list):
         if _nc_file[:5] == "https":
             eng = "rasterio"  # switch engine for remote processing
         else:
-            eng = "h5netcdf"
+            pass
+        eng = "h5netcdf"
 
-        with xr.open_dataset(_nc_file, engine=eng) as _xds:
+        # Create an S3 filesystem object
+        # Open the NetCDF file using xarray's open_dataset function
+        _nc_file = 's3://' + cache_dir + '/' + _nc_file.split('/')[-1]
+        s3_file_obj = s3.open(_nc_file, mode='rb')
+
+        # with xr.open_dataset(_nc_file, engine=eng) as _xds:
+        with xr.open_dataset(s3_file_obj, engine=eng) as _xds:
             shp = _xds["U2D"].shape
             dtp = _xds["U2D"].dtype
             data_allvars = np.zeros(shape=(len(var_list), shp[1], shp[2]), dtype=dtp)
@@ -218,7 +231,7 @@ def get_forcing_timelist(crosswalk_dict: dict, filelist: list, var_list: list):
     return df_by_t, t
 
 
-def time2catchment(data_list, time_list, var_list_out):
+def time2catchment(data_list, time_list, var_list_out, ii_collect_stats):
     """
     Convert a list of catchment dictionaries into a single dictionary of dataframes for each catchment
 
@@ -230,8 +243,11 @@ def time2catchment(data_list, time_list, var_list_out):
     dfs : a dictionary of catchment based dataframes
 
     """
+    ii_collect_stats = True
 
     dfs = {}
+    stats_avg = []
+    stats_median = []
     for jcat in list(data_list[0].keys()):
         data_catch = []
         for jt in range(len(data_list)):
@@ -240,7 +256,18 @@ def time2catchment(data_list, time_list, var_list_out):
         dfs[jcat]["time"] = time_list
         dfs[jcat] = dfs[jcat][["time"] + var_list_out]
 
-    return dfs
+        if ii_collect_stats:
+            stacked = np.stack(data_catch)
+            data_avg = np.average(stacked,axis=0)
+            data_median = np.median(stacked,axis=0)
+            stats_avg.append([jcat] + list(data_avg))
+            stats_median.append([jcat] + list(data_median))
+
+    if ii_collect_stats:
+        avg_df = pd.DataFrame(stats_avg,columns=['catchment'] + var_list_out)
+        median_df = pd.DataFrame(stats_median,columns=['catchment'] + var_list_out)
+
+    return dfs, avg_df, median_df
 
 
 def cmd(cmd):
@@ -257,7 +284,7 @@ def cmd(cmd):
 
 
 def locate_dl_files_threaded(
-    cache_dir: str, ii_cache: bool, ii_verbose: bool, forcing_file_names: list, nthreads: int
+    cache_dir: str, ii_cache: bool, ii_verbose: bool, forcing_file_names: list, nthreads: int, s3=None
 ):
     """
     Look for forcing files locally, if found, will apend to local file list for local processing
@@ -280,49 +307,59 @@ def locate_dl_files_threaded(
     dl_files = []
     cmds = []
     for jfile in forcing_file_names:
+
         file_parts = Path(jfile).parts
         local_file = os.path.join(cache_dir, file_parts[-1])
         ii_dl = False
 
-        # decide whether to use local file, download it, or index it remotely
-        if os.path.exists(local_file):
-            # Check to make sure file is not broken
+        if s3 is not None:
             try:
-                with xr.open_dataset(local_file, engine="h5netcdf") as _xds:
-                    pass
-                if ii_cache:
-                    if ii_verbose:
-                        print(f"Found and using local raw forcing file {local_file}")
-                else:
-                    if ii_verbose:
-                        print(
-                            f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}"
-                        )
-                local_files.append(local_file)
+                # if this succeeds, file has been found in bucket
+                s3_obj = s3.get_object(Bucket=cache_dir,Key=local_file.split('/')[1])    
+                local_files.append(jfile)            
             except:
-                if ii_cache:
-                    if ii_verbose:
-                        print(f"{local_file} is broken! Will Download")
-                    ii_dl = True
-                else:
-                    if ii_verbose:
-                        print(f"{local_file} is broken! Will index remotely")
-                    remote_files.append(jfile)
+                raise Exception(f'{local_file} not found in {cache_dir}!!')
+        else:
 
-        elif not os.path.exists(local_file) and not ii_cache:
-            # If file is not found locally, and we don't want to cache it, append to remote file list
-            remote_files.append(jfile)
-        elif not os.path.exists(local_file) and ii_cache:
-            ii_dl = True
+            # decide whether to use local file, download it, or index it remotely
+            if os.path.exists(local_file):
+                # Check to make sure file is not broken
+                try:
+                    with xr.open_dataset(local_file, engine="h5netcdf") as _xds:
+                        pass
+                    if ii_cache:
+                        if ii_verbose:
+                            print(f"Found and using local raw forcing file {local_file}")
+                    else:
+                        if ii_verbose:
+                            print(
+                                f"CACHE OPTION OVERRIDE : Found and using local raw forcing file {local_file}"
+                            )
+                    local_files.append(local_file)
+                except:
+                    if ii_cache:
+                        if ii_verbose:
+                            print(f"{local_file} is broken! Will Download")
+                        ii_dl = True
+                    else:
+                        if ii_verbose:
+                            print(f"{local_file} is broken! Will index remotely")
+                        remote_files.append(jfile)
 
-        if ii_dl:
-            # Download file
-            if ii_verbose:
-                print(f"Forcing file not found! Downloading {jfile}")
-            command = f"wget -P {cache_dir} -c {jfile}"
-            cmds.append(command)
-            dl_files.append(jfile)
-            local_files.append(local_file)
+            elif not os.path.exists(local_file) and not ii_cache:
+                # If file is not found locally, and we don't want to cache it, append to remote file list
+                remote_files.append(jfile)
+            elif not os.path.exists(local_file) and ii_cache:
+                ii_dl = True
+
+            if ii_dl:
+                # Download file
+                if ii_verbose:
+                    print(f"Forcing file not found! Downloading {jfile}")
+                command = f"wget -P {cache_dir} -c {jfile}"
+                cmds.append(command)
+                dl_files.append(jfile)
+                local_files.append(local_file)
 
     # Get files with pool
     if len(cmds) > 0:
@@ -332,32 +369,40 @@ def locate_dl_files_threaded(
 
     return local_files, remote_files
 
-def threaded_data_extract(files,nthreads,ii_verbose,crosswalk_dict,var_list):
+# TODO: Clean up script by implementing read/write file functions
+def write_file(
+        filename : str,
+        filepath : str,
+        storage_type : str,
+        output_file_type : str,
+        s3 = None,
+        bucket = None,
+        df = pd.DataFrame
+):
     """
-    Sets up the thread pool for get_forcing_timelist and returns the data and time axis ordered in time
-    
+    filename : name of the file to be written
+    filepath : if storage_type is local, this is the local path to output folder
     """
-    pool = cf.ThreadPoolExecutor(max_workers=nthreads)
-    arg0 = []
-    arg1 = []
-    arg2 = []
-    for i in range(len(files)):
-        arg0.append(crosswalk_dict)
-        arg1.append([files[i]])
-        arg2.append(var_list)
-
-    results = pool.map(get_forcing_timelist, arg0, arg1, arg2)
-
-    data_list = []
-    for jres in results:
-        data_list.append(jres)
-
-    # Build time axis
-    t_ax_local = []
-    for i in range(len(files)):
-        t_ax_local.append(data_list[i][1])   
-
-    return  data_list, t_ax_local
+    if storage_type == "local":
+        forcing_path = filepath
+        if output_file_type == "csv":
+            csvname = Path(forcing_path, f"{filename}.csv")
+            df.to_csv(filename, index=False)
+        if output_file_type == "parquet":
+            parq_file = Path(forcing_path, f"{filename}.parquet")
+            df.to_parquet(filename)
+    elif storage_type == "S3":
+        output_bucket_path = filepath
+        buf = BytesIO()
+        if output_file_type == "parquet":
+            parq_file = f"{filename}.parquet"
+            df.to_parquet(buf)
+        elif output_file_type == "csv":
+            csvname = f"{filename}.csv"
+            df.to_csv(buf, index=False)
+        buf.seek(0)
+        key_name = f"{output_bucket_path}/forcing/{csvname}"
+        s3.put_object(Bucket=bucket, Key=key_name, Body=buf.getvalue())
 
 
 def prep_ngen_data(conf):
@@ -370,6 +415,8 @@ def prep_ngen_data(conf):
 
     Will store files in the same folder as the JSON config to run this script
     """
+
+    datentime = datetime.utcnow().strftime("%m%d%y_%H%M%S")
 
     t00 = time.perf_counter()
 
@@ -384,6 +431,7 @@ def prep_ngen_data(conf):
     meminput = conf["forcing"].get("meminput",None)
     urlbaseinput = conf["forcing"].get("urlbaseinput",None)
     nwm_file = conf["forcing"].get("nwm_file",None)
+    path_override = conf["forcing"].get("path_override",None)
     fcst_cycle = conf["forcing"].get("fcst_cycle",None)
     lead_time = conf["forcing"].get("lead_time",None)
     data_type = conf["forcing"].get("data_type",None)
@@ -404,7 +452,7 @@ def prep_ngen_data(conf):
 
     ii_verbose = conf["run"]["verbose"]    
     dl_threads = conf["run"]["dl_threads"]
-    proc_threads = conf["run"]["proc_threads"]
+    ii_collect_stats = conf["run"].get("collect_stats",True)
 
     print(f"\nWelcome to Preparing Data for NextGen-Based Simulations!\n")
 
@@ -435,10 +483,12 @@ def prep_ngen_data(conf):
         # Prep output directory
         top_dir = Path(os.path.dirname(__file__)).parent
         bucket_path = Path(top_dir, output_bucket_path, output_bucket)
-        forcing_path = Path(bucket_path, 'forcing')        
+        forcing_path = Path(bucket_path, 'forcing')  
+        meta_path = Path(forcing_path, 'metadata')        
         if not os.path.exists(bucket_path):
             os.system(f"mkdir {bucket_path}")            
             os.system(f"mkdir {forcing_path}")
+            os.system(f"mkdir {meta_path}")
             if not os.path.exists(bucket_path):
                 raise Exception(f"Creating {bucket_path} failed!")
              
@@ -454,18 +504,40 @@ def prep_ngen_data(conf):
         ii_wgt_file = os.path.exists(wgt_file)
 
     elif storage_type == "S3":
-        with open(Path(Path(os.path.dirname(__file__)),"credentials")) as f:
+        cache_dir = cache_bucket
+
+        
+
+        # TODO: Authenticate with Vault
+        print(f'SECURITY VULNERABILITY: CREDENTIALS IN IMAGE')
+        with open(os.path.join(os.getcwd(),"ngen_forcing/credentials")) as f:
             creds = f.readlines()
+
+        key_id = creds[1].split(' = ')[1][:-1]
+        key = creds[2].split(' = ')[1][:-1]
+
+        fs_s3 = s3fs.S3FileSystem(anon=False, 
+                          key=key_id, 
+                          secret=key)
+
         s3 = boto3.client("s3",
-                        aws_access_key_id=creds[1].split(' = ')[1][:-1],
-                        aws_secret_access_key=creds[2].split(' = ')[1][:-1]
+                        aws_access_key_id=key_id,
+                        aws_secret_access_key=key
                         )        
+        
         try:
             wgt_file = s3.get_object(Bucket=cache_bucket, Key=f"{vpu_or_subset}_weights.json")
             ii_wgt_file = True
         except :
             ii_wgt_file = False
             raise NotImplementedError(f'Need to implement weight file creation in bucket')
+    
+        # Save config to metadata
+        s3.put_object(
+                Body=json.dumps(conf),
+                Bucket=output_bucket,
+                Key=f"{output_bucket_path}/forcing/metadata/{datentime}/conf.json"
+            )
 
     # Generate weight file only if one doesn't exist already
     # TODO: This will break hard if looking for the weight file in S3, 
@@ -563,7 +635,6 @@ def prep_ngen_data(conf):
     # Get nwm forcing file names
     t0 = time.perf_counter()
     if not forcing_type == 'from_file':
-
         if forcing_type == "operational_archive":
             nwm_forcing_files = create_file_list(
                 runinput,
@@ -592,6 +663,13 @@ def prep_ngen_data(conf):
                 )
             nwm_forcing_files = nwm_forcing_files[0]
 
+        if path_override is not None:
+            print(f'Over riding path with {path_override}')
+            files = []
+            for jfile in nwm_forcing_files:
+                files.append(path_override + jfile.split('/')[-1])
+            nwm_forcing_files = files
+
     else:
         nwm_forcing_files = []
         with open(nwm_file, "r") as f:
@@ -605,15 +683,11 @@ def prep_ngen_data(conf):
     proc_time += time.perf_counter() - t0
 
     # This will look for local raw forcing files and download them if needed
-    if storage_type == 'local':
-        t0 = time.perf_counter()
-        local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
-            cache_dir, ii_cache, ii_verbose, nwm_forcing_files, dl_threads
-        )
-        dl_time += time.perf_counter() - t0
-    else:
-        remote_nwm_files = nwm_forcing_files
-        local_nwm_files = []
+    t0 = time.perf_counter()
+    local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
+        cache_dir, ii_cache, ii_verbose, nwm_forcing_files, dl_threads, s3
+    )
+    dl_time += time.perf_counter() - t0
 
     var_list = [
         "U2D",
@@ -638,21 +712,11 @@ def prep_ngen_data(conf):
     ]
 
     t0 = time.perf_counter()
-    # Index remote files with threads
-    if len(remote_nwm_files) > 0:
-        if ii_verbose:
-            print(
-                f"Performing threaded remote data extraction with {proc_threads} workers..."
-            )
-        remote_data_list, t_ax_remote = threaded_data_extract(remote_nwm_files,proc_threads,ii_verbose,crosswalk_dict,var_list)
 
-    # Index local files with threads
-    if len(local_nwm_files) > 0:
-        if ii_verbose:
-            print(
-                f"Performing threaded local data extraction with {proc_threads} workers..."
-            )
-        local_data_list, t_ax_local = threaded_data_extract(local_nwm_files,proc_threads,ii_verbose,crosswalk_dict,var_list)      
+
+    # AWS does not support thread pools so this will have to be unthreaded...
+    if len(remote_nwm_files) > 0: remote_data_list, t_ax_remote = get_forcing_timelist(crosswalk_dict,remote_nwm_files,var_list,cache_dir,fs_s3)
+    if len(local_nwm_files) > 0: local_data_list, t_ax_local = get_forcing_timelist(crosswalk_dict,local_nwm_files,var_list,cache_dir,fs_s3)  
 
     # Sync in time between remote and local files
     complete_data_timelist = []
@@ -661,26 +725,27 @@ def prep_ngen_data(conf):
         filename = Path(ifile).parts[-1]
         for j, jfile in enumerate(local_nwm_files):
             if jfile.find(filename) >= 0:
-                complete_data_timelist.append(local_data_list[j][0][0])
+                complete_data_timelist.append(local_data_list[j])
                 timelist.append(t_ax_local[j])
         for j, jfile in enumerate(remote_nwm_files):
             if jfile.find(filename) >= 0:
-                complete_data_timelist.append(remote_data_list[j][0][0])
+                complete_data_timelist.append(remote_data_list[j])
                 timelist.append(t_ax_remote[j])
 
     # Convert time-synced list of catchment dictionaries
     # to catchment based dataframes
     if ii_verbose:
         print(f"Reformatting data into dataframes...")
-    dfs = time2catchment(complete_data_timelist, timelist, var_list_out)
+    dfs, stats_avg, stats_median = time2catchment(complete_data_timelist, timelist, var_list_out, ii_collect_stats)
     proc_time += time.perf_counter() - t0
 
     # Write to file
     t0 = time.perf_counter()
     nfiles = len(dfs)
     write_int = 1000
+    catch_lim = 10
     for j, jcatch in enumerate(dfs.keys()):
-        if j > 10: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.
+        if j > catch_lim: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.
         df = dfs[jcatch]
         splt = jcatch.split("-")
 
@@ -701,7 +766,7 @@ def prep_ngen_data(conf):
                 df.to_csv(buf, index=False)
             buf.seek(0)
             key_name = f"{output_bucket_path}/forcing/{csvname}"
-            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
+            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())     
 
         if (j + 1) % write_int == 0:
             print(
@@ -713,21 +778,136 @@ def prep_ngen_data(conf):
                 f"{j+1} files written out of {len(dfs)}, {(j+1)/len(dfs)*100:.2f}%",
                 end="\r",
             )
-    write_time = time.perf_counter() - t0
+    if storage_type == "S3": buf.close()
+    write_time = time.perf_counter() - t0    
+
     total_time = time.perf_counter() - t00
 
+    # Metadata        
+    if ii_collect_stats:
+        t000 = time.perf_counter()
+        print(f'\nSaving metadata...')
+        # Write out a csv with script runtime stats
+        nwm_file_sizes = []
+        for jfile in nwm_forcing_files:
+            response = s3.head_object(
+                Bucket=cache_bucket,
+                Key=jfile.split('/')[-1]
+            )
+            nwm_file_sizes.append(response['ContentLength'])
+        nwm_file_size_avg = np.average(nwm_file_sizes)
+        nwm_file_size_med = np.median(nwm_file_sizes)
+        nwm_file_size_std = np.std(nwm_file_sizes)
+
+        catchment_sizes = []
+        zipped_sizes = []
+        for j, jcatch in enumerate(dfs.keys()):     
+            if j > catch_lim: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.   
+            
+            # Check forcing size
+            splt = jcatch.split("-")
+            csvname = f"cat{vpu}_{splt[1]}.csv"
+            key_name = f"{output_bucket_path}/forcing/{csvname}"
+            response = s3.head_object(
+                Bucket=output_bucket,
+                Key=key_name
+            )
+            catchment_sizes.append(response['ContentLength'])
+
+            # zip 
+            zipname = csvname[:-4] + '.zip'
+            buf = BytesIO()
+            buf.seek(0)
+            df = dfs[jcatch]
+            with gzip.GzipFile(mode='w', fileobj=buf) as zipped_file:
+                df.to_csv(TextIOWrapper(zipped_file, 'utf8'), index=False)
+            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/zipped_forcing/{zipname}"
+            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())    
+            buf.close()
+
+            # Check zipped size            
+            response = s3.head_object(
+                Bucket=output_bucket,
+                Key=key_name
+            )
+            zipped_sizes.append(response['ContentLength'])
+
+        catch_file_size_avg = np.average(catchment_sizes)
+        catch_file_size_med = np.median(catchment_sizes)
+        catch_file_size_std = np.std(catchment_sizes)    
+
+        catch_file_zip_size_avg = np.average(zipped_sizes)
+        catch_file_zip_size_med = np.median(zipped_sizes)
+        catch_file_zip_size_std = np.std(zipped_sizes)  
+
+        metadata_script = {        
+            "runtime_s"               : [round(total_time,2)],
+            "nvars_intput"            : [len(var_list)],
+            "nvars_output"            : [len(var_list_out)],   
+            "nwmfiles_input"          : [len(nwm_forcing_files)],           
+            "nwm_file_size_avg"       : [nwm_file_size_avg],
+            "nwm_file_size_med"       : [nwm_file_size_med],
+            "nwm_file_size_std"       : [nwm_file_size_std],
+            "catch_files_output"      : [nfiles],
+            "catch_file_size_avg"     : [catch_file_size_avg],
+            "catch_file_size_med"     : [catch_file_size_med],
+            "catch_file_size_std"     : [catch_file_size_std],
+            "catch_file_zip_size_avg" : [catch_file_zip_size_avg],
+            "catch_file_zip_size_med" : [catch_file_zip_size_med],
+            "catch_file_zip_size_std" : [catch_file_zip_size_std],                                                 
+        }
+
+        # TODO: if we pull this script from a repo, include the hash
+        if False:
+            repo = git.Repo(search_parent_directories=True)
+            sha = repo.head.object.hexsha
+            metadata_script["commit"] = sha
+
+        # Save input config file and script commit 
+        metadata_df = pd.DataFrame.from_dict(metadata_script)
+        if storage_type == 'S3':
+            buf = BytesIO()
+            
+            csvname = f"metadata_{vpu_or_subset}_{datentime}.csv"
+            metadata_df.to_csv(buf, index=False)
+            buf.seek(0)
+            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/{csvname}"
+            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
+
+            # Save catchment based forcing stats
+            csvname = f"catchments_avg.csv"
+            stats_avg.to_csv(buf, index=False)
+            buf.seek(0)
+            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/{csvname}"
+            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())        
+
+            csvname = f"catchments_median.csv"
+            stats_median.to_csv(buf, index=False)
+            buf.seek(0)
+            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/{csvname}"
+            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
+
+            buf.close()
+
+        else:
+            # TODO
+            raise NotImplementedError
+        
+        meta_time = time.perf_counter() - t000
+        
     print(f"\n\n--------SUMMARY-------")
     if storage_type == "local":
         msg = f"\nData has been written locally to {bucket_path}"
     else:
-        msg = f"\nData has been written to S3 bucket {output_bucket} at {output_bucket_path}"
+        msg = f"\nData has been written to S3 bucket {output_bucket} at /{output_bucket_path}/forcing"
     msg += f"\nCheck and DL data : {dl_time:.2f}s"
     msg += f"\nProcess data      : {proc_time:.2f}s"
     msg += f"\nWrite data        : {write_time:.2f}s"
     msg += f"\nTotal time        : {total_time:.2f}s\n"
+    if ii_collect_stats: msg += f"\nCollect stats     : {meta_time:.2f}s"
+    
     print(msg)
-
-
+    
 if __name__ == "__main__":
     # Take in user config
     parser = argparse.ArgumentParser()

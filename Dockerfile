@@ -18,7 +18,8 @@ COPY requirements.txt ${FUNCTION_DIR}
 COPY lambda_function.py ${FUNCTION_DIR}
 
 # Install the function's dependencies
-RUN pip install \
+RUN pip3 install --upgrade pip
+RUN pip3 install --no-cache-dir \
     --target ${FUNCTION_DIR} \
         awslambdaric
 
@@ -34,12 +35,11 @@ WORKDIR ${FUNCTION_DIR}
 # Copy in the built dependencies
 COPY --from=build-image ${FUNCTION_DIR} ${FUNCTION_DIR}
 
-RUN pip install -r "${FUNCTION_DIR}/requirements.txt" --target ${FUNCTION_DIR} 
-RUN pip install --upgrade google-api-python-client
-RUN pip install --upgrade google-cloud-storage
+RUN pip3 install --upgrade pip
+RUN pip3 install --no-cache-dir -r "${FUNCTION_DIR}/requirements.txt"
 
 # Set runtime interface client as default command for the container runtime
 ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
 
-# # Pass the name of the function handler as an argument to the runtime
+# Pass the name of the function handler as an argument to the runtime
 CMD [ "lambda_function.handler" ]
