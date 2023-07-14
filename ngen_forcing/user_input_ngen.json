@@ -1,8 +1,8 @@
 {
     "forcing"  : {
-        "forcing_type" : "retrospective",
-        "start_date"   : "19790201",
-        "end_date"     : "19790202",
+        "forcing_type" : "operational_archive",
+        "start_date"   : "20220822",
+        "end_date"     : "20220822",
         "cache"        : true,        
         "nwm_file"     : "",
         "runinput"     : 2,

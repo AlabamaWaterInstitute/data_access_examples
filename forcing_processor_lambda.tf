@@ -40,8 +40,6 @@ variable "memory_size" {
   type = number
 }
 
-
-# Resources
 provider "aws" {
   region = var.region
 }
@@ -50,6 +48,7 @@ data "aws_ecr_repository" "image_repo" {
   name = var.ecr_repo
 }
 
+# Create function and set role
 resource "aws_lambda_function" "forcing_processor_function" {
   function_name = var.function_name
   timeout       = 900 # 900 is max
@@ -79,6 +78,7 @@ resource "aws_iam_role" "forcing_processor_function_role" {
   })
 }
 
+# Set up the trigger
 resource "aws_s3_bucket" "trigger_bucket" {
   bucket = var.trigger_bucket
 }
@@ -104,6 +104,7 @@ resource "aws_lambda_permission" "allow_bucket" {
   source_arn    = aws_s3_bucket.trigger_bucket.arn
 }
 
+# Logging
 resource "aws_cloudwatch_log_group" "function_log_group" {
   name              = "${aws_lambda_function.forcing_processor_function.function_name}"
   retention_in_days = 7
@@ -133,4 +134,27 @@ resource "aws_iam_policy" "function_logging_policy" {
 resource "aws_iam_role_policy_attachment" "function_logging_policy_attachment" {
   role = aws_iam_role.forcing_processor_function_role.id
   policy_arn = aws_iam_policy.function_logging_policy.arn
+}
+
+# Add secret access to lambda function
+resource "aws_iam_policy" "secrets_manager_policy" {
+  name        = "secrets_manager_access_policy"
+  description = "Allows access to Secrets Manager"
+
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowSecretsManagerAccess"
+        Effect    = "Allow"
+        Action    = ["secretsmanager:GetSecretValue"]
+        Resource  = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "secrets_manager_attachment" {
+  role       = aws_iam_role.forcing_processor_function_role.name
+  policy_arn = aws_iam_policy.secrets_manager_policy.arn
 }

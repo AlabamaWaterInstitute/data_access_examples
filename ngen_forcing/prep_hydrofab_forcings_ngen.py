@@ -3,20 +3,18 @@
 
 import pandas as pd
 import argparse, os, json, sys
-import fsspec
 import s3fs
 from pathlib import Path
 import geopandas as gpd
 import numpy as np
 import xarray as xr
-from google.cloud import storage
 from rasterio.io import MemoryFile
 from rasterio.features import rasterize
 import time
 import boto3
+from botocore.exceptions import ClientError
 from io import BytesIO, TextIOWrapper
 import concurrent.futures as cf
-import git
 import gzip
 from datetime import datetime
 
@@ -52,54 +50,54 @@ def get_cache_dir(nwm_cache_dir: str,create: bool = True):
 def make_parent_dir(filepath):
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
-def get_dataset(nwm_cache_dir: str, blob_name: str, use_cache: bool = True) -> xr.Dataset:
-    """Retrieve a blob from the data service as xarray.Dataset.
-    Based largely on OWP HydroTools.
-    Parameters
-    ----------
-    blob_name: str, required
-        Name of blob to retrieve.
-    use_cache: bool, default True
-        If cache should be used.
-        If True, checks to see if file is in cache, and
-        If fetched from remote, will save to cache.
-    Returns
-    -------
-    ds : xarray.Dataset
-        The data stored in the blob.
-    """
-    # TODO: Check to see if this does any better than kerchunk
-    # the caching should help, but probably needs to be managed to function asynchronously.
-    # Perhaps if theget_dataset files is not cached, we can create the dataset from
-    # kerchunk with a remote path and then asynchronously do a download to cache it
-    # for next time. The hypothesis would be that the download speed will not be any slower than
-    # just accessing the file remotely.
-    nc_filepath = os.path.join(get_cache_dir(nwm_cache_dir), blob_name)
-    make_parent_dir(nc_filepath)
+# def get_dataset(nwm_cache_dir: str, blob_name: str, use_cache: bool = True) -> xr.Dataset:
+#     """Retrieve a blob from the data service as xarray.Dataset.
+#     Based largely on OWP HydroTools.
+#     Parameters
+#     ----------
+#     blob_name: str, required
+#         Name of blob to retrieve.
+#     use_cache: bool, default True
+#         If cache should be used.
+#         If True, checks to see if file is in cache, and
+#         If fetched from remote, will save to cache.
+#     Returns
+#     -------
+#     ds : xarray.Dataset
+#         The data stored in the blob.
+#     """
+#     # TODO: Check to see if this does any better than kerchunk
+#     # the caching should help, but probably needs to be managed to function asynchronously.
+#     # Perhaps if theget_dataset files is not cached, we can create the dataset from
+#     # kerchunk with a remote path and then asynchronously do a download to cache it
+#     # for next time. The hypothesis would be that the download speed will not be any slower than
+#     # just accessing the file remotely.
+#     nc_filepath = os.path.join(get_cache_dir(nwm_cache_dir), blob_name)
+#     make_parent_dir(nc_filepath)
 
-    # If the file exists and use_cache = True
-    if os.path.exists(nc_filepath) and use_cache:
-        # Get dataset from cache
-        ds = xr.load_dataset(
-            nc_filepath,
-            engine="h5netcdf",
-        )
-        return ds
-    else:
-        # Get raw bytes
-        raw_bytes = get_blob(blob_name)
-        # Create Dataset
-        ds = xr.load_dataset(
-            MemoryFile(raw_bytes),
-            engine="h5netcdf",
-        )
-        if use_cache:
-            # Subset and cache
-            ds["RAINRATE"].to_netcdf(
-                nc_filepath,
-                engine="h5netcdf",
-            )
-        return ds
+#     # If the file exists and use_cache = True
+#     if os.path.exists(nc_filepath) and use_cache:
+#         # Get dataset from cache
+#         ds = xr.load_dataset(
+#             nc_filepath,
+#             engine="h5netcdf",
+#         )
+#         return ds
+#     else:
+#         # Get raw bytes
+#         raw_bytes = get_blob(blob_name)
+#         # Create Dataset
+#         ds = xr.load_dataset(
+#             MemoryFile(raw_bytes),
+#             engine="h5netcdf",
+#         )
+#         if use_cache:
+#             # Subset and cache
+#             ds["RAINRATE"].to_netcdf(
+#                 nc_filepath,
+#                 engine="h5netcdf",
+#             )
+#         return ds
 
 def generate_weights_file(
     gdf: gpd.GeoDataFrame,
@@ -139,22 +137,22 @@ def generate_weights_file(
         f.write(weights_json)
 
 
-def get_blob(blob_name: str, bucket: str = NWM_BUCKET) -> bytes:
-    """Retrieve a blob from the data service as bytes.
-    Based largely on OWP HydroTools.
-    Parameters
-    ----------
-    blob_name : str, required
-        Name of blob to retrieve.
-    Returns
-    -------
-    data : bytes
-        The data stored in the blob.
-    """
-    # Setup anonymous client and retrieve blob data
-    client = storage.Client.create_anonymous_client()
-    bucket = client.bucket(bucket)
-    return bucket.blob(blob_name).download_as_bytes(timeout=120)
+# def get_blob(blob_name: str, bucket: str = NWM_BUCKET) -> bytes:
+#     """Retrieve a blob from the data service as bytes.
+#     Based largely on OWP HydroTools.
+#     Parameters
+#     ----------
+#     blob_name : str, required
+#         Name of blob to retrieve.
+#     Returns
+#     -------
+#     data : bytes
+#         The data stored in the blob.
+#     """
+#     # Setup anonymous client and retrieve blob data
+#     client = storage.Client.create_anonymous_client()
+#     bucket = client.bucket(bucket)
+#     return bucket.blob(blob_name).download_as_bytes(timeout=120)
 
 def get_weights_dict(weights_file):
     # Open weights dict from pickle
@@ -200,7 +198,6 @@ def get_forcing_timelist(crosswalk_dict: dict, filelist: list, var_list: list, c
     t : model_output_valid_time for each
 
     """
-    fs = fsspec.filesystem('s3', anon=True)
 
     df_by_t = []
     t = []
@@ -369,6 +366,37 @@ def locate_dl_files_threaded(
 
     return local_files, remote_files
 
+
+def get_secret(
+        secret_name : str,
+        region_name : str,
+
+):
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+
+    # Decrypts secret using the associated KMS key.
+    secret = get_secret_value_response['SecretString']
+
+    # Your code goes here.
+
+    return json.loads(secret)
+
+
 # TODO: Clean up script by implementing read/write file functions
 def write_file(
         filename : str,
@@ -453,6 +481,8 @@ def prep_ngen_data(conf):
     ii_verbose = conf["run"]["verbose"]    
     dl_threads = conf["run"]["dl_threads"]
     ii_collect_stats = conf["run"].get("collect_stats",True)
+    secret_name = conf["run"]["secret_name"]
+    region_name = conf["run"]["region_name"]
 
     print(f"\nWelcome to Preparing Data for NextGen-Based Simulations!\n")
 
@@ -506,15 +536,10 @@ def prep_ngen_data(conf):
     elif storage_type == "S3":
         cache_dir = cache_bucket
 
-        
+        secret = get_secret(secret_name,region_name)
 
-        # TODO: Authenticate with Vault
-        print(f'SECURITY VULNERABILITY: CREDENTIALS IN IMAGE')
-        with open(os.path.join(os.getcwd(),"ngen_forcing/credentials")) as f:
-            creds = f.readlines()
-
-        key_id = creds[1].split(' = ')[1][:-1]
-        key = creds[2].split(' = ')[1][:-1]
+        key_id = secret['aws_access_key_id']
+        key = secret['aws_secret_access_key']
 
         fs_s3 = s3fs.S3FileSystem(anon=False, 
                           key=key_id, 
@@ -684,6 +709,7 @@ def prep_ngen_data(conf):
 
     # This will look for local raw forcing files and download them if needed
     t0 = time.perf_counter()
+    if ii_verbose: print(f'Locating nwm input forcing files...')
     local_nwm_files, remote_nwm_files = locate_dl_files_threaded(
         cache_dir, ii_cache, ii_verbose, nwm_forcing_files, dl_threads, s3
     )
@@ -715,6 +741,7 @@ def prep_ngen_data(conf):
 
 
     # AWS does not support thread pools so this will have to be unthreaded...
+    if ii_verbose: print(f'Extracting data...')
     if len(remote_nwm_files) > 0: remote_data_list, t_ax_remote = get_forcing_timelist(crosswalk_dict,remote_nwm_files,var_list,cache_dir,fs_s3)
     if len(local_nwm_files) > 0: local_data_list, t_ax_local = get_forcing_timelist(crosswalk_dict,local_nwm_files,var_list,cache_dir,fs_s3)  
 
