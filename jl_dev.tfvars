@@ -1,3 +1,4 @@
+deployment_version = "0.2"
 region = "us-west-2"
 trigger_bucket = "nwm.test"
 ecr_repo = "nextgenforcing"

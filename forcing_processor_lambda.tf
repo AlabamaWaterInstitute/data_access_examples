@@ -8,6 +8,10 @@ terraform {
 }
 
 # Variable declarations
+variable "deployment_version" {
+  type = string
+}
+
 variable "region" {
   type = string
 }
@@ -50,9 +54,9 @@ data "aws_ecr_repository" "image_repo" {
 
 # Create function and set role
 resource "aws_lambda_function" "forcing_processor_function" {
-  function_name = var.function_name
+  function_name = "${var.function_name}_${var.deployment_version}"
   timeout       = 900 # 900 is max
-  image_uri     = "${data.aws_ecr_repository.image_repo.repository_url}:${var.image_tag}"
+  image_uri     = "${data.aws_ecr_repository.image_repo.repository_url}:${var.image_tag}_${deployment_version}"
   package_type  = "Image"
 
   memory_size = var.memory_size
@@ -102,15 +106,6 @@ resource "aws_lambda_permission" "allow_bucket" {
   function_name = aws_lambda_function.forcing_processor_function.arn
   principal     = "s3.amazonaws.com"
   source_arn    = aws_s3_bucket.trigger_bucket.arn
-}
-
-# Logging
-resource "aws_cloudwatch_log_group" "function_log_group" {
-  name              = "${aws_lambda_function.forcing_processor_function.function_name}"
-  retention_in_days = 7
-  lifecycle {
-    prevent_destroy = false
-  }
 }
 
 resource "aws_iam_policy" "function_logging_policy" {
