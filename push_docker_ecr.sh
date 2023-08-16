@@ -1,9 +1,3 @@
-# Set default values
-AWS_ACCT_ID="010036277732"
-IMAGE_NAME="forcingprocessor"
-REPO_NAME="nextgenforcing"
-REGION="us-west-2"
-
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -23,6 +17,10 @@ while [[ $# -gt 0 ]]; do
       REGION="$2"
       shift 2
       ;;
+    --test)
+      TEST="$2"
+      shift 2
+      ;;      
     *)
       echo "Unknown argument: $1"
       exit 1
@@ -35,12 +33,13 @@ echo "AWS_ACCT_ID: $AWS_ACCT_ID"
 echo "IMAGE_NAME: $IMAGE_NAME"
 echo "REPO_NAME: $REPO_NAME"
 echo "REGION: $REGION"
+echo "TEST: $TEST"
 
 # build docker image
 echo "Building docker image ${REPO_NAME}"
 docker build --no-cache -t ${IMAGE_NAME} .
 
-# Validate docker credentials
+# Validate aws credentials
 echo "Validating credentials"
 aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin "${AWS_ACCT_ID}.dkr.ecr.us-west-2.amazonaws.com"
 
@@ -76,8 +75,12 @@ aws lambda update-function-code \
     --region ${REGION}
 
 # Test
-echo "Testing deployment"
-aws s3api put-object \
-  --bucket nwm.test \
-  --key 02.conus.nc.txt \
-  --body ~/code/data_access_examples/data/cache/02.conus.nc.txt
+if [[ "$TEST" == "TRUE" ]]; then
+    echo "Testing deployment"
+    aws s3api put-object \
+      --bucket nwm.test \
+      --key 02.conus.nc.txt \
+      --body ~/code/data_access_examples/data/cache/02.conus.nc.txt
+else
+    echo "Lambda function was not tested"
+fi
