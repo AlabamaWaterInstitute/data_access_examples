@@ -17,6 +17,7 @@ from io import BytesIO, TextIOWrapper
 import concurrent.futures as cf
 import gzip
 from datetime import datetime
+import hashlib
 
 pkg_dir = Path(Path(os.path.dirname(__file__)).parent, "nwm_filenames")
 sys.path.append(str(pkg_dir))
@@ -49,55 +50,6 @@ def get_cache_dir(nwm_cache_dir: str,create: bool = True):
 
 def make_parent_dir(filepath):
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-
-# def get_dataset(nwm_cache_dir: str, blob_name: str, use_cache: bool = True) -> xr.Dataset:
-#     """Retrieve a blob from the data service as xarray.Dataset.
-#     Based largely on OWP HydroTools.
-#     Parameters
-#     ----------
-#     blob_name: str, required
-#         Name of blob to retrieve.
-#     use_cache: bool, default True
-#         If cache should be used.
-#         If True, checks to see if file is in cache, and
-#         If fetched from remote, will save to cache.
-#     Returns
-#     -------
-#     ds : xarray.Dataset
-#         The data stored in the blob.
-#     """
-#     # TODO: Check to see if this does any better than kerchunk
-#     # the caching should help, but probably needs to be managed to function asynchronously.
-#     # Perhaps if theget_dataset files is not cached, we can create the dataset from
-#     # kerchunk with a remote path and then asynchronously do a download to cache it
-#     # for next time. The hypothesis would be that the download speed will not be any slower than
-#     # just accessing the file remotely.
-#     nc_filepath = os.path.join(get_cache_dir(nwm_cache_dir), blob_name)
-#     make_parent_dir(nc_filepath)
-
-#     # If the file exists and use_cache = True
-#     if os.path.exists(nc_filepath) and use_cache:
-#         # Get dataset from cache
-#         ds = xr.load_dataset(
-#             nc_filepath,
-#             engine="h5netcdf",
-#         )
-#         return ds
-#     else:
-#         # Get raw bytes
-#         raw_bytes = get_blob(blob_name)
-#         # Create Dataset
-#         ds = xr.load_dataset(
-#             MemoryFile(raw_bytes),
-#             engine="h5netcdf",
-#         )
-#         if use_cache:
-#             # Subset and cache
-#             ds["RAINRATE"].to_netcdf(
-#                 nc_filepath,
-#                 engine="h5netcdf",
-#             )
-#         return ds
 
 def generate_weights_file(
     gdf: gpd.GeoDataFrame,
@@ -135,24 +87,6 @@ def generate_weights_file(
     )
     with open(weights_filepath, "w") as f:
         f.write(weights_json)
-
-
-# def get_blob(blob_name: str, bucket: str = NWM_BUCKET) -> bytes:
-#     """Retrieve a blob from the data service as bytes.
-#     Based largely on OWP HydroTools.
-#     Parameters
-#     ----------
-#     blob_name : str, required
-#         Name of blob to retrieve.
-#     Returns
-#     -------
-#     data : bytes
-#         The data stored in the blob.
-#     """
-#     # Setup anonymous client and retrieve blob data
-#     client = storage.Client.create_anonymous_client()
-#     bucket = client.bucket(bucket)
-#     return bucket.blob(blob_name).download_as_bytes(timeout=120)
 
 def get_weights_dict(weights_file):
     # Open weights dict from pickle
@@ -396,43 +330,6 @@ def get_secret(
 
     return json.loads(secret)
 
-
-# TODO: Clean up script by implementing read/write file functions
-def write_file(
-        filename : str,
-        filepath : str,
-        storage_type : str,
-        output_file_type : str,
-        s3 = None,
-        bucket = None,
-        df = pd.DataFrame
-):
-    """
-    filename : name of the file to be written
-    filepath : if storage_type is local, this is the local path to output folder
-    """
-    if storage_type == "local":
-        forcing_path = filepath
-        if output_file_type == "csv":
-            csvname = Path(forcing_path, f"{filename}.csv")
-            df.to_csv(filename, index=False)
-        if output_file_type == "parquet":
-            parq_file = Path(forcing_path, f"{filename}.parquet")
-            df.to_parquet(filename)
-    elif storage_type == "S3":
-        output_bucket_path = filepath
-        buf = BytesIO()
-        if output_file_type == "parquet":
-            parq_file = f"{filename}.parquet"
-            df.to_parquet(buf)
-        elif output_file_type == "csv":
-            csvname = f"{filename}.csv"
-            df.to_csv(buf, index=False)
-        buf.seek(0)
-        key_name = f"{output_bucket_path}/forcing/{csvname}"
-        s3.put_object(Bucket=bucket, Key=key_name, Body=buf.getvalue())
-
-
 def prep_ngen_data(conf):
     """
     Primary function to retrieve forcing and hydrofabric data and convert it into files that can be ingested into ngen.
@@ -507,6 +404,9 @@ def prep_ngen_data(conf):
         vpu_or_subset = catchment_subset + "_upstream"
     else:
         vpu_or_subset = vpu
+
+    if output_bucket_path == "":
+        output_bucket_path = start_date
 
     if storage_type == "local":
 
@@ -715,6 +615,9 @@ def prep_ngen_data(conf):
     )
     dl_time += time.perf_counter() - t0
 
+    # HACK 
+    local_nwm_files = local_nwm_files[:3]
+
     var_list = [
         "U2D",
         "V2D",
@@ -738,7 +641,6 @@ def prep_ngen_data(conf):
     ]
 
     t0 = time.perf_counter()
-
 
     # AWS does not support thread pools so this will have to be unthreaded...
     if ii_verbose: print(f'Extracting data...')
@@ -766,30 +668,37 @@ def prep_ngen_data(conf):
     dfs, stats_avg, stats_median = time2catchment(complete_data_timelist, timelist, var_list_out, ii_collect_stats)
     proc_time += time.perf_counter() - t0
 
-    # Write to file
+    # Write forcings to file
     t0 = time.perf_counter()
     nfiles = len(dfs)
     write_int = 1000
     catch_lim = 10
+    forcing_cat_ids = []
+    forcing_hashes = []
     for j, jcatch in enumerate(dfs.keys()):
         if j > catch_lim: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.
         df = dfs[jcatch]
-        splt = jcatch.split("-")
+        cat_id = jcatch.split("-")[1]
+
+        forcing_cat_ids.append(cat_id)
+
+        sha256_hash = hashlib.sha256(df.to_json().encode()).hexdigest()
+        forcing_hashes.append(sha256_hash)
 
         if storage_type == "local":
             if output_file_type == "csv":
-                csvname = Path(forcing_path, f"cat{vpu}_{splt[1]}.csv")
+                csvname = Path(forcing_path, f"cat{vpu}_{cat_id}.csv")
                 df.to_csv(csvname, index=False)
             if output_file_type == "parquet":
-                parq_file = Path(forcing_path, f"cat{vpu}_{splt[1]}.parquet")
+                parq_file = Path(forcing_path, f"cat{vpu}_{cat_id}.parquet")
                 df.to_parquet(parq_file)
         elif storage_type == "S3":
             buf = BytesIO()
             if output_file_type == "parquet":
-                parq_file = f"cat{vpu}_{splt[1]}.parquet"
+                parq_file = f"cat{vpu}_{cat_id}.parquet"
                 df.to_parquet(buf)
             elif output_file_type == "csv":
-                csvname = f"cat{vpu}_{splt[1]}.csv"
+                csvname = f"cat{vpu}_{cat_id}.csv"
                 df.to_csv(buf, index=False)
             buf.seek(0)
             key_name = f"{output_bucket_path}/forcing/{csvname}"
@@ -802,7 +711,7 @@ def prep_ngen_data(conf):
             )
         if j == nfiles - 1:
             print(
-                f"{j+1} files written out of {len(dfs)}, {(j+1)/len(dfs)*100:.2f}%",
+                f"{j+1} files written out of {len(dfs)}, {(j+1)/len(dfs)*100:.2f}%\n",
                 end="\r",
             )
     if storage_type == "S3": buf.close()
@@ -812,8 +721,21 @@ def prep_ngen_data(conf):
 
     # Metadata        
     if ii_collect_stats:
+
+        # Forcing hashes
+        full_str = ''
+        for x in forcing_hashes: full_str = full_str + x
+        root_hash = hashlib.sha256(full_str.encode()).hexdigest()
+
+        hash_dict = {"root_hash":root_hash,
+                     "cat_ids":forcing_cat_ids,
+                     "hash":forcing_hashes,                    
+                     }
+        
+        hash_df = pd.DataFrame(dict([(key, pd.Series(value)) for key, value in hash_dict.items()]))
+
         t000 = time.perf_counter()
-        print(f'\nSaving metadata...')
+        print(f'Saving metadata...')
         # Write out a csv with script runtime stats
         nwm_file_sizes = []
         for jfile in nwm_forcing_files:
@@ -848,7 +770,7 @@ def prep_ngen_data(conf):
             df = dfs[jcatch]
             with gzip.GzipFile(mode='w', fileobj=buf) as zipped_file:
                 df.to_csv(TextIOWrapper(zipped_file, 'utf8'), index=False)
-            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/zipped_forcing/{zipname}"
+            key_name = f"{output_bucket_path}/metadata/{datentime}/zipped_forcing/{zipname}"
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())    
             buf.close()
 
@@ -867,58 +789,61 @@ def prep_ngen_data(conf):
         catch_file_zip_size_med = np.median(zipped_sizes)
         catch_file_zip_size_std = np.std(zipped_sizes)  
 
-        metadata_script = {        
+        mil = 1000000
+
+        metadata = {        
             "runtime_s"               : [round(total_time,2)],
-            "nvars_intput"            : [len(var_list)],
-            "nvars_output"            : [len(var_list_out)],   
+            "nvars_intput"            : [len(var_list)],               
             "nwmfiles_input"          : [len(nwm_forcing_files)],           
-            "nwm_file_size_avg"       : [nwm_file_size_avg],
-            "nwm_file_size_med"       : [nwm_file_size_med],
-            "nwm_file_size_std"       : [nwm_file_size_std],
+            "nwm_file_size_avg_MB"    : [nwm_file_size_avg/mil],
+            "nwm_file_size_med_MB"    : [nwm_file_size_med/mil],
+            "nwm_file_size_std_MB"    : [nwm_file_size_std/mil],
             "catch_files_output"      : [nfiles],
-            "catch_file_size_avg"     : [catch_file_size_avg],
-            "catch_file_size_med"     : [catch_file_size_med],
-            "catch_file_size_std"     : [catch_file_size_std],
-            "catch_file_zip_size_avg" : [catch_file_zip_size_avg],
-            "catch_file_zip_size_med" : [catch_file_zip_size_med],
-            "catch_file_zip_size_std" : [catch_file_zip_size_std],                                                 
+            "nvars_output"            : [len(var_list_out)],
+            "catch_file_size_avg_MB"  : [catch_file_size_avg/mil],
+            "catch_file_size_med_MB"  : [catch_file_size_med/mil],
+            "catch_file_size_std_MB"  : [catch_file_size_std/mil],
+            "catch_file_zip_size_avg_MB" : [catch_file_zip_size_avg/mil],
+            "catch_file_zip_size_med_MB" : [catch_file_zip_size_med/mil],
+            "catch_file_zip_size_std_MB" : [catch_file_zip_size_std/mil],                                                 
         }
 
-        # TODO: if we pull this script from a repo, include the hash
-        if False:
-            repo = git.Repo(search_parent_directories=True)
-            sha = repo.head.object.hexsha
-            metadata_script["commit"] = sha
-
         # Save input config file and script commit 
-        metadata_df = pd.DataFrame.from_dict(metadata_script)
+        metadata_df = pd.DataFrame.from_dict(metadata)
         if storage_type == 'S3':
+            # Write files to s3 bucket
             buf = BytesIO()
-            
+            csvname = f"hashes_{vpu_or_subset}_{datentime}.csv"
+            hash_df.to_csv(buf, index=False)
+            buf.seek(0)
+            key_name = f"{output_bucket_path}/metadata/{csvname}"
+            s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())            
             csvname = f"metadata_{vpu_or_subset}_{datentime}.csv"
             metadata_df.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/{csvname}"
+            key_name = f"{output_bucket_path}/metadata/{csvname}"
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
-
-            # Save catchment based forcing stats
-            csvname = f"catchments_avg.csv"
+            csvname = f"catchments_avg_{datentime}.csv"
             stats_avg.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/{csvname}"
+            key_name = f"{output_bucket_path}/metadata/{csvname}"
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())        
-
-            csvname = f"catchments_median.csv"
+            csvname = f"catchments_median_{datentime}.csv"
             stats_median.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{output_bucket_path}/forcing/metadata/{datentime}/{csvname}"
+            key_name = f"{output_bucket_path}/metadata/{csvname}"
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
-
             buf.close()
-
         else:
-            # TODO
-            raise NotImplementedError
+            # Write files locally
+            csvname = Path(forcing_path, f"hashes_{vpu_or_subset}_{datentime}.csv")
+            hash_df.to_csv(csvname, index=False)
+            csvname = Path(forcing_path, f"metadata_{vpu_or_subset}_{datentime}.csv")
+            metadata_df.to_csv(csvname, index=False)
+            csvname = Path(forcing_path, f"catchments_avg_{datentime}.csv")
+            stats_avg.to_csv(csvname, index=False)
+            csvname = Path(forcing_path, f"catchments_median_{datentime}.csv")
+            stats_median.to_csv(csvname, index=False)
         
         meta_time = time.perf_counter() - t000
         
@@ -934,7 +859,8 @@ def prep_ngen_data(conf):
     if ii_collect_stats: msg += f"\nCollect stats     : {meta_time:.2f}s"
     
     print(msg)
-    
+
+
 if __name__ == "__main__":
     # Take in user config
     parser = argparse.ArgumentParser()
