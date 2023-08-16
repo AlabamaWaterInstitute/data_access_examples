@@ -461,7 +461,7 @@ def prep_ngen_data(conf):
         s3.put_object(
                 Body=json.dumps(conf),
                 Bucket=output_bucket,
-                Key=f"{output_bucket_path}/forcing/metadata/{datentime}/conf.json"
+                Key=f"{output_bucket_path}/metadata/{datentime}/conf.json"
             )
 
     # Generate weight file only if one doesn't exist already
@@ -812,26 +812,27 @@ def prep_ngen_data(conf):
         metadata_df = pd.DataFrame.from_dict(metadata)
         if storage_type == 'S3':
             # Write files to s3 bucket
+            meta_path = f"{output_bucket_path}/metadata/"
             buf = BytesIO()
             csvname = f"hashes_{vpu_or_subset}_{datentime}.csv"
             hash_df.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{output_bucket_path}/metadata/{csvname}"
+            key_name = meta_path + csvname
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())            
             csvname = f"metadata_{vpu_or_subset}_{datentime}.csv"
             metadata_df.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{output_bucket_path}/metadata/{csvname}"
+            key_name = meta_path + csvname
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
             csvname = f"catchments_avg_{datentime}.csv"
             stats_avg.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{output_bucket_path}/metadata/{csvname}"
+            key_name = meta_path + csvname
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())        
             csvname = f"catchments_median_{datentime}.csv"
             stats_median.to_csv(buf, index=False)
             buf.seek(0)
-            key_name = f"{output_bucket_path}/metadata/{csvname}"
+            key_name = meta_path + csvname
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
             buf.close()
         else:
