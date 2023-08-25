@@ -41,7 +41,7 @@ docker build --no-cache -t ${IMAGE_NAME} .
 
 # Validate aws credentials
 echo "Validating credentials"
-aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin "${AWS_ACCT_ID}.dkr.ecr.us-west-2.amazonaws.com"
+aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin "${AWS_ACCT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
 # Create repo
 echo "Checking image repo status"

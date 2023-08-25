@@ -406,7 +406,7 @@ def prep_ngen_data(conf):
         vpu_or_subset = vpu
 
     if output_bucket_path == "":
-        output_bucket_path = start_date
+        output_bucket_path = datentime
 
     if storage_type == "local":
 
@@ -414,7 +414,7 @@ def prep_ngen_data(conf):
         top_dir = Path(os.path.dirname(__file__)).parent
         bucket_path = Path(top_dir, output_bucket_path, output_bucket)
         forcing_path = Path(bucket_path, 'forcing')  
-        meta_path = Path(forcing_path, 'metadata')        
+        meta_path = Path(forcing_path, 'forcing_metadata')        
         if not os.path.exists(bucket_path):
             os.system(f"mkdir {bucket_path}")            
             os.system(f"mkdir {forcing_path}")
@@ -461,7 +461,7 @@ def prep_ngen_data(conf):
         s3.put_object(
                 Body=json.dumps(conf),
                 Bucket=output_bucket,
-                Key=f"{output_bucket_path}/metadata/{datentime}/conf.json"
+                Key=f"{output_bucket_path}/forcing_metadata/conf.json"
             )
 
     # Generate weight file only if one doesn't exist already
@@ -770,7 +770,7 @@ def prep_ngen_data(conf):
             df = dfs[jcatch]
             with gzip.GzipFile(mode='w', fileobj=buf) as zipped_file:
                 df.to_csv(TextIOWrapper(zipped_file, 'utf8'), index=False)
-            key_name = f"{output_bucket_path}/metadata/{datentime}/zipped_forcing/{zipname}"
+            key_name = f"{output_bucket_path}/forcing_metadata/zipped_forcing/{zipname}"
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())    
             buf.close()
 
@@ -812,24 +812,24 @@ def prep_ngen_data(conf):
         metadata_df = pd.DataFrame.from_dict(metadata)
         if storage_type == 'S3':
             # Write files to s3 bucket
-            meta_path = f"{output_bucket_path}/metadata/"
+            meta_path = f"{output_bucket_path}/forcing_metadata/"
             buf = BytesIO()
-            csvname = f"hashes_{vpu_or_subset}_{datentime}.csv"
+            csvname = f"hashes_{vpu_or_subset}.csv"
             hash_df.to_csv(buf, index=False)
             buf.seek(0)
             key_name = meta_path + csvname
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())            
-            csvname = f"metadata_{vpu_or_subset}_{datentime}.csv"
+            csvname = f"metadata_{vpu_or_subset}.csv"
             metadata_df.to_csv(buf, index=False)
             buf.seek(0)
             key_name = meta_path + csvname
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())
-            csvname = f"catchments_avg_{datentime}.csv"
+            csvname = f"catchments_avg.csv"
             stats_avg.to_csv(buf, index=False)
             buf.seek(0)
             key_name = meta_path + csvname
             s3.put_object(Bucket=output_bucket, Key=key_name, Body=buf.getvalue())        
-            csvname = f"catchments_median_{datentime}.csv"
+            csvname = f"catchments_median.csv"
             stats_median.to_csv(buf, index=False)
             buf.seek(0)
             key_name = meta_path + csvname
@@ -837,13 +837,13 @@ def prep_ngen_data(conf):
             buf.close()
         else:
             # Write files locally
-            csvname = Path(forcing_path, f"hashes_{vpu_or_subset}_{datentime}.csv")
+            csvname = Path(forcing_path, f"hashes_{vpu_or_subset}.csv")
             hash_df.to_csv(csvname, index=False)
-            csvname = Path(forcing_path, f"metadata_{vpu_or_subset}_{datentime}.csv")
+            csvname = Path(forcing_path, f"metadata_{vpu_or_subset}.csv")
             metadata_df.to_csv(csvname, index=False)
-            csvname = Path(forcing_path, f"catchments_avg_{datentime}.csv")
+            csvname = Path(forcing_path, f"catchments_avg.csv")
             stats_avg.to_csv(csvname, index=False)
-            csvname = Path(forcing_path, f"catchments_median_{datentime}.csv")
+            csvname = Path(forcing_path, f"catchments_median.csv")
             stats_median.to_csv(csvname, index=False)
         
         meta_time = time.perf_counter() - t000

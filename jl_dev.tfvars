@@ -1,6 +1,5 @@
-deployment_version = "0.2"
-region = "us-west-2"
-trigger_bucket = "nwm.test"
+region = "us-east-2"
+trigger_bucket = "ngenresources"
 ecr_repo = "nextgenforcing"
 function_name = "forcingprocessor"
 trigger_file_prefix = ""

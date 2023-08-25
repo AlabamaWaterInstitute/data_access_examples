@@ -8,10 +8,6 @@ terraform {
 }
 
 # Variable declarations
-variable "deployment_version" {
-  type = string
-}
-
 variable "region" {
   type = string
 }
@@ -54,9 +50,9 @@ data "aws_ecr_repository" "image_repo" {
 
 # Create function and set role
 resource "aws_lambda_function" "forcing_processor_function" {
-  function_name = "${var.function_name}_${var.deployment_version}"
+  function_name = "${var.function_name}"
   timeout       = 900 # 900 is max
-  image_uri     = "${data.aws_ecr_repository.image_repo.repository_url}:${var.image_tag}_${deployment_version}"
+  image_uri     = "${data.aws_ecr_repository.image_repo.repository_url}:${var.image_tag}"
   package_type  = "Image"
 
   memory_size = var.memory_size
