@@ -16,7 +16,7 @@ git clone github.com/<githubusername>/<repository_name>
 
 * Open GitHub and issue a pull request.
 
-* **IMPORTANT** Keep your main branch code up-to-date with the upstream repository using the following commands. As commits from other developers accumulate in the main, merge these into your fork prior to issuing a pull request.
+* **IMPORTANT** Keep your code up-to-date with the upstream repository using the following commands. As commits from other developers accumulate in the upstream main branch, rebase your branch onto those changes prior to issuing a pull request.
 
 ```
 git remote add upstream https://github.com/alabamawaterinstitute/data_access_examples.git
@@ -128,7 +128,7 @@ To change the URL of the origin to git@github.com:user/repo_name.git you would t
 
 When you're prompted to "Enter a file in which to save the key", you can press Enter to accept the default file location.
 
-  3.	Print out the contents of the public key and copy these for paasing into the GitHub account.
+  6.	Print out the contents of the public key and copy these for paasing into the GitHub account.
 
 ```
 		cat <location where the public key was saved in step 2, probably "id_ed25519.pub">
@@ -137,7 +137,7 @@ After getting the SSH key, save it in your GitHub account per instructions [here
 
 ____
 
-### 8. Incorporate upstream changes into your fork
+### 6. Incorporate upstream changes into your fork
 
 To incorporate any changes from the main codebase into your
 local repo main, `checkout` your `main` branch and do a
@@ -162,7 +162,7 @@ git push
 ____
 
 
-### 9. Create a new development branch
+### 7. Create a new development branch
 
 Branches are parallel versions of the repository that allow you
 to make changes and tinker as much as you would like without
@@ -204,7 +204,7 @@ git checkout <branch-name>
 ```
 ____
 
-### 6. Push the local branch to the remote repository
+### 8. Push the local branch to the remote repository
 
 At anytime after you create your development branch, you can synchronize your local commits
 (there will be nothing to start with; much more later) with you GitHub fork.
@@ -220,7 +220,7 @@ To Push the local branch to the remote repository,
 ____
 
 
-### 10. Incorporate upstream changes into your development branch
+### 9. Incorporate upstream changes into your development branch
 
 Any time you update `main` with changes from the `upstream`
 remote (step 5), it is advised to rebase any local development
@@ -236,20 +236,20 @@ git rebase main
 ```
 ____
 
-### 11. Tinker in your development branches.
+### 10. Make changes in your development branches.
 In your local development branches, explore the code, make changes,
-and tinker at will. **Be creative!**
+and experiment at will. **Be creative!**
 
 ____
 
-### 12. Add new and changed files to the staging area
+### 11. Add new and changed files to the staging area
 
 ```
 git add <list of your changed files>
 ```
 ____
 
-### 13. Commit your changes to the checked out development branch
+### 12. Commit your changes to the checked out development branch
 Commits should be accompanied by a concise and brief comment.
 Like the "save" button in a word processor, commits should be made
 early and often.
@@ -269,7 +269,7 @@ Additional detail below a blank line, like this.
 ```
 ____
 
-### 14. Push commits to GitHub
+### 13. Push commits to GitHub
 In order to get any accumulated commits in GitHub on your remote branch,
 push the changes. Make sure that you have the correct development branch
 checked out, first.
@@ -286,7 +286,7 @@ git push origin <branch-name>
 ```
 ____
 
-### 15. Submit a pull request
+### 14. Submit a pull request
 After you git push all commits to your branch and you believe
 you are ready to post code to the main codebase, open GitHub
 and issue a pull request. (It will probably be a highlighted
@@ -310,8 +310,8 @@ the code can be the reviewer; for major changes, it should
 be someone outside the core development team.
 ____
 
-### 16. Useful references
-- If some of the terminology used above is confusing - we agree.
+## Useful references
+- If some of the terminology used above is confusing - it is confusing to us too, sometimes!
 This [GitHub glossary](https://help.github.com/en/github/getting-started-with-github/github-glossary#checkout)
 is a useful reference.
 -  For a better guide on how to use GitHub to collaborate on
@@ -321,7 +321,7 @@ NOAA development projects, please see the
 
 ## A couple of useful Git Commands
 - `git stash` takes changes and puts them on a stack. See the stashed changes with `git stash list`
-- `git show -p` shows the changes incorporated in the most recent commit on your active branch. Helpful for figuring out where you are in a complet git operation.
+- `git show -p` shows the changes incorporated in the most recent commit on your active branch -- helpful for figuring out where you are in a not-yet-complete edit.
 - `git log` shows where you are in the development tree. `git log --graph --oneline --all` adds a few key options to make things more clear.
 - `git rebase --abort` lets you back out of a sticky situation.
 - `git add -p` adds changes one-by-one through your repository.
