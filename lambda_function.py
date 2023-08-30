@@ -4,7 +4,7 @@ import sys, json
 def handler(event, context):
 
     # load template config
-    conf = json.load(open('/function/ngen_forcing/ngen_forcings_lambda.json'))
+    conf = json.load(open('/data_access_examples/ngen_forcing/ngen_forcings_lambda.json'))
 
     # get date from event
 
