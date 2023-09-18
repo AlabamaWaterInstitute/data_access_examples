@@ -364,6 +364,8 @@ def prep_ngen_data(conf):
 
     version = conf["hydrofab"].get('version','v1.2')
     vpu = conf["hydrofab"].get("vpu")
+    if vpu =='ENV': vpu = os.getenv('VPU') # allows lambdas to be unique
+
     catchment_subset = conf['hydrofab'].get("catch_subset")
     geopkg_file = conf["hydrofab"].get("geopkg_file")
     ii_weights_only = conf['hydrofab'].get('weights_only',False)
