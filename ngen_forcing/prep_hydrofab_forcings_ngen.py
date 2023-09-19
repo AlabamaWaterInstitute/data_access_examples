@@ -31,7 +31,7 @@ sys.path.append(str(pkg_dir))
 from subset import subset_upstream
 
 TEMPLATE_BLOB_NAME = (
-    "nwm.20221001/forcing_medium_range/nwm.t00z.medium_range.forcing.f001.conus.nc"
+    "nwm.t00z.medium_range.forcing.f001.conus.nc"
 )
 NWM_BUCKET = "national-water-model"
 
@@ -40,6 +40,52 @@ CONUS_NWM_WKT = 'PROJCS["Lambert_Conformal_Conic",GEOGCS["GCS_Sphere",DATUM["D_S
 PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["false_easting",0.0],\
 PARAMETER["false_northing",0.0],PARAMETER["central_meridian",-97.0],PARAMETER["standard_parallel_1",30.0],\
 PARAMETER["standard_parallel_2",60.0],PARAMETER["latitude_of_origin",40.0],UNIT["Meter",1.0]]'
+
+def get_dataset(
+        blob_name: str,
+        use_cache: bool = True
+) -> xr.Dataset:
+    """Retrieve a blob from the data service as xarray.Dataset.
+    Based largely on OWP HydroTools.
+    Parameters
+    ----------
+    blob_name: str, required
+        Name of blob to retrieve.
+    use_cacahe: bool, default True
+        If cache should be used.  
+        If True, checks to see if file is in cache, and 
+        if fetched from remote will save to cache.
+    Returns
+    -------
+    ds : xarray.Dataset
+        The data stored in the blob.
+    """
+    # nc_filepath = os.path.join(get_cache_dir(), blob_name)
+    # make_parent_dir(nc_filepath)
+
+    # # If the file exists and use_cache = True
+    # if os.path.exists(nc_filepath) and use_cache:
+        # Get dataset from cache
+    ds = xr.open_dataset(
+        blob_name,
+        engine='h5netcdf',
+    )
+    return ds
+    # else:
+    #     # Get raw bytes
+    #     raw_bytes = get_blob(blob_name)
+    #     # Create Dataset
+    #     ds = xr.load_dataset(
+    #         MemoryFile(raw_bytes),
+    #         engine='h5netcdf',
+    #     )
+    #     if use_cache:
+    #         # Subset and cache
+    #         ds["RAINRATE"].to_netcdf(
+    #             nc_filepath,
+    #             engine='h5netcdf',
+    #         )
+    #     return ds
 
 def get_cache_dir(nwm_cache_dir: str,create: bool = True):
     if not os.path.exists(nwm_cache_dir) and create:
@@ -396,13 +442,13 @@ def prep_ngen_data(conf):
     assert (
         output_file_type in file_types
     ), f"{output_file_type} for output_file_type is not accepted! Accepted: {file_types}"
-    bucket_types = ["local", "S3"]
+    bucket_types = ["local", "s3"]
     assert (
-        storage_type in bucket_types
+        storage_type.lower() in bucket_types
     ), f"{storage_type} for storage_type is not accepted! Accepted: {bucket_types}"
-    assert vpu is not None or geopkg_file is not None, "Need to input either vpu or geopkg_file"
+    assert vpu is not None or geopkg_file is not None, "Need to input either vpu or geopkg_file"    
         
-    if catchment_subset is not None:
+    if len(catchment_subset) > 0:
         vpu_or_subset = catchment_subset + "_upstream"
     else:
         vpu_or_subset = vpu
@@ -418,6 +464,7 @@ def prep_ngen_data(conf):
         forcing_path = Path(bucket_path, 'forcing')  
         meta_path = Path(forcing_path, 'forcing_metadata')        
         if not os.path.exists(bucket_path):
+            os.system(f"mkdir {bucket_path}")
             os.system(f"mkdir {bucket_path}")            
             os.system(f"mkdir {forcing_path}")
             os.system(f"mkdir {meta_path}")
@@ -432,6 +479,7 @@ def prep_ngen_data(conf):
             if not os.path.exists(cache_dir):
                 raise Exception(f"Creating {cache_dir} failed!")   
 
+        if len(geopkg_file) == 0: geopkg_file = os.path.join(cache_dir,"nextgen_" + vpu + ".gpkg")
         wgt_file = os.path.join(cache_dir, f"{vpu_or_subset}_weights.json")
         ii_wgt_file = os.path.exists(wgt_file)
 
@@ -538,7 +586,8 @@ def prep_ngen_data(conf):
             t0 = time.perf_counter()
             polygonfile = gpd.read_file(gpkg, layer="divides")
 
-            ds = get_dataset(nwm_cache_dir,TEMPLATE_BLOB_NAME, use_cache=True)
+            ds = get_dataset(os.path.join(nwm_cache_dir,TEMPLATE_BLOB_NAME), use_cache=True)
+            # ds = get_dataset(nwm_cache_dir,TEMPLATE_BLOB_NAME, use_cache=True)
             src = ds["RAINRATE"]
 
             if ii_verbose:
@@ -557,7 +606,7 @@ def prep_ngen_data(conf):
 
     # Exit early if we only want to calculate the weights
     if ii_weights_only:
-        exit
+        return
 
     # Get nwm forcing file names
     t0 = time.perf_counter()
@@ -616,9 +665,6 @@ def prep_ngen_data(conf):
         cache_dir, ii_cache, ii_verbose, nwm_forcing_files, dl_threads, s3
     )
     dl_time += time.perf_counter() - t0
-
-    # HACK 
-    local_nwm_files = local_nwm_files[:3]
 
     var_list = [
         "U2D",

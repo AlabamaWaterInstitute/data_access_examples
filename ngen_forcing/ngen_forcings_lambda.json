@@ -3,7 +3,7 @@
         "forcing_type" : "operational_archive",
         "start_date"   : "20230705",
         "end_date"     : "20230705",
-        "cache"        : true,        
+        "cache"        : false,        
         "nwm_file"     : "",
         "path_override": "",
         "runinput"     : 1,
@@ -17,17 +17,17 @@
 
     "hydrofab" : {
         "version"      : "v1.2",
-        "vpu"          : "03W",
-        "geopkg_file"  : "data/cache/nextgen_03W.gpkg",
-        "catch_subset" : "cat-115362",
+        "vpu"          : "ENV",
+        "geopkg_file"  : "",
+        "catch_subset" : "",
         "weights_only" : false
     },
 
     "storage":{
         "storage_type"       : "S3",
-        "output_bucket"      : "ngenforcing",
+        "output_bucket"      : "ngenforcingdev1",
         "output_bucket_path" : "",
-        "cache_bucket"       : "ngenresources",
+        "cache_bucket"       : "ngenforcingresources",
         "cache_bucket_path"  : "",
         "output_file_type"   : "csv"
     },    
@@ -37,6 +37,6 @@
         "dl_threads"    : 1,
         "collect_stats" : true,
         "secret_name"   : "jlaser_creds",
-        "region_name"   : "us-east-2"
+        "region_name"   : "us-west-2"
     }
 }
