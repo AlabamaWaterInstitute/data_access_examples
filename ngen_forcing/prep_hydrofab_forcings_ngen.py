@@ -501,7 +501,8 @@ def prep_ngen_data(conf):
                         )        
         
         try:
-            wgt_file = s3.get_object(Bucket=cache_bucket, Key=f"{vpu_or_subset}_weights.json")
+            print(f'{cache_bucket} {vpu_or_subset}')
+            wgt_file = s3.get_object(Bucket=cache_bucket, Key=f"{vpu_or_subset}_weights.json")            
             ii_wgt_file = True
         except :
             ii_wgt_file = False
