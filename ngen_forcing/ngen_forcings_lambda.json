@@ -1,0 +1,42 @@
+{
+    "forcing"  : {
+        "forcing_type" : "operational_archive",
+        "start_date"   : "20230705",
+        "end_date"     : "20230705",
+        "cache"        : false,        
+        "nwm_file"     : "",
+        "path_override": "",
+        "runinput"     : 1,
+        "varinput"     : 5,
+        "geoinput"     : 1,
+        "meminput"     : 0,
+        "urlbaseinput" : 3,
+        "fcst_cycle"   : [0],
+        "lead_time"    : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
+    },
+
+    "hydrofab" : {
+        "version"      : "v1.2",
+        "vpu"          : "ENV",
+        "geopkg_file"  : "",
+        "catch_subset" : "",
+        "weights_only" : false
+    },
+
+    "storage":{
+        "storage_type"       : "S3",
+        "output_bucket"      : "ngenforcingdev1",
+        "output_bucket_path" : "",
+        "cache_bucket"       : "ngenforcingresources",
+        "cache_bucket_path"  : "",
+        "output_file_type"   : "csv"
+    },    
+
+    "run" : {
+        "verbose"       : true,
+        "dl_threads"    : 1,
+        "collect_stats" : true,
+        "secret_name"   : "jlaser_creds",
+        "region_name"   : "us-west-2"
+    }
+}

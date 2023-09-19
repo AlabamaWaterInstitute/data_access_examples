@@ -1,0 +1,3 @@
+data/*
+venv9/
+tests/data/ngen_inputs/forcing/*
