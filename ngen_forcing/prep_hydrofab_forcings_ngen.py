@@ -725,7 +725,7 @@ def prep_ngen_data(conf):
     forcing_cat_ids = []
     forcing_hashes = []
     for j, jcatch in enumerate(dfs.keys()):
-        if j > catch_lim: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.
+        # if j > catch_lim: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.
         df = dfs[jcatch]
         cat_id = jcatch.split("-")[1]
 
@@ -800,7 +800,7 @@ def prep_ngen_data(conf):
         catchment_sizes = []
         zipped_sizes = []
         for j, jcatch in enumerate(dfs.keys()):     
-            if j > catch_lim: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.   
+            # if j > catch_lim: break # TODO: remove this break for actual deployment. Just don't want to get charged for uploads.   
             
             # Check forcing size
             splt = jcatch.split("-")
