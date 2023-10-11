@@ -145,6 +145,7 @@ urlbasedict = {
     5: "gs://national-water-model/",
     6: "gcs://national-water-model/",
     7: "https://noaa-nwm-pds.s3.amazonaws.com/",
+    8: "s3://noaa-nwm-pds/",
 }
 
 
