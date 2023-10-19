@@ -160,7 +160,10 @@ valid_folder_names = [
     "medium_range_blend_coastal_atlgulf",
     "medium_range_blend_coastal_pacific",
     "medium_range_coastal_atlgulf_mem1",
-    "short_range"
+    "short_range",
+    "medium_range",
+    "long_range_mem7",
+    "medium_range_no_da_mem6"
 ]
 import requests
 
@@ -171,11 +174,19 @@ def is_valid_url(url):
     except requests.ConnectionError:
         return False
 
+
 @pytest.mark.parametrize("runinput, varinput, geoinput, meminput, start_date, end_date, fcst_cycle, urlbaseinput, lead_time, expected_output", [
     (1, 1, 1, 0, "201809170000", "201809172300", fcst_cycle_values, 3, None, ["expected_file_name_1"]),
     (5, 5, 2, 1, "201809170000", "201809171200", fcst_cycle_values, 1, lead_time_values, ["expected_file_name_2"]),
     (2, 5, 3, 3, "201809170600", "201809171800", fcst_cycle_values, 2, lead_time_values, ["expected_file_name_3"]),
-
+    (1, 1, 5, 4, "201809170200", "201809171400", fcst_cycle_values, 4, lead_time_values, ["expected_file_name_4"]),
+    (2, 2, 4, 5, "201809170800", "201809172000", fcst_cycle_values, 5, lead_time_values, ["expected_file_name_5"]),
+    (3, 1, 5, 6, "201809171000", "201809172200", fcst_cycle_values, 6, lead_time_values, ["expected_file_name_6"]),
+    (4, 2, 5, 7, "201809171200", "201809172400", fcst_cycle_values, 7, lead_time_values, ["expected_file_name_7"]),
+    (5, 5, 1, 8, "201809171400", "201809172600", fcst_cycle_values, 8, lead_time_values, ["expected_file_name_8"]),
+    (6, 1, 16, 9, "201809171600", "201809172800", fcst_cycle_values, 9, lead_time_values, ["expected_file_name_9"]),
+    (8, 5, 3, 12, "201809172200", "201809173400", fcst_cycle_values, 12, lead_time_values, ["expected_file_name_12"]),
+    (11, 1, 3, 18, "201809173400", "201809174600", fcst_cycle_values, 18, lead_time_values, ["expected_file_name_18"]),
 ])
 def test_create_file_list(runinput, varinput, geoinput, meminput, start_date, end_date, fcst_cycle, urlbaseinput, lead_time, expected_output):
     file_list = create_file_list(runinput, varinput, geoinput, meminput, start_date, end_date, fcst_cycle, urlbaseinput, lead_time)
